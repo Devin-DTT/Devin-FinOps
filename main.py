@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from models import UsageLogsResponse, CostSettings
 from mock_data import MOCK_LOGS
+from typing import Optional
 import math
 
 app = FastAPI(
@@ -26,10 +27,15 @@ def root():
 @app.get("/api/v1/usage_logs", response_model=UsageLogsResponse)
 def get_usage_logs(
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(50, ge=1, le=500, description="Number of items per page")
+    page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
+    limit: Optional[int] = Query(None, ge=1, le=500, description="Alias for page_size"),
+    start_date: Optional[str] = Query(None, description="Start date filter (optional for mock)"),
+    end_date: Optional[str] = Query(None, description="End date filter (optional for mock)")
 ):
+    effective_page_size = limit if limit is not None else page_size
+    
     total = len(MOCK_LOGS)
-    total_pages = math.ceil(total / page_size)
+    total_pages = math.ceil(total / effective_page_size)
     
     if page > total_pages and total > 0:
         return JSONResponse(
@@ -39,17 +45,19 @@ def get_usage_logs(
             }
         )
     
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
+    start_idx = (page - 1) * effective_page_size
+    end_idx = start_idx + effective_page_size
     
     paginated_logs = MOCK_LOGS[start_idx:end_idx]
+    has_more = page < total_pages
     
     return UsageLogsResponse(
         data=paginated_logs,
         total=total,
         page=page,
-        page_size=page_size,
-        total_pages=total_pages
+        page_size=effective_page_size,
+        total_pages=total_pages,
+        has_more=has_more
     )
 
 
