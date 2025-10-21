@@ -57,6 +57,7 @@ class UsageLogsResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    has_more: bool
 
 
 class CostSettings(BaseModel):

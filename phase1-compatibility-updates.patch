@@ -1,0 +1,93 @@
+From 1a7488c6143d7955040281cbf291123ceefd3062 Mon Sep 17 00:00:00 2001
+From: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+Date: Tue, 21 Oct 2025 14:48:11 +0000
+Subject: [PATCH] feat: Add compatibility for get_raw_data.py client
+
+- Accept 'limit' parameter as alias for 'page_size'
+- Accept optional 'start_date' and 'end_date' parameters
+- Add 'has_more' boolean to UsageLogsResponse for pagination
+- Ensures compatibility with Phase 1 data retrieval script
+
+Testing completed:
+- Mock API server running on localhost:8000
+- Successfully retrieved 1000 usage logs via pagination
+- Data saved to raw_usage_data.json
+
+Link to Devin run: https://deloitte.devinenterprise.com/sessions/1acc5212d2ed40618ce55dc842105127
+Requested by: gtorreshuamantica@deloitte.es
+
+Co-Authored-By: gtorreshuamantica@deloitte.es <gtorreshuamantica@deloitte.es>
+---
+ main.py   | 20 ++++++++++++++------
+ models.py |  1 +
+ 2 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/main.py b/main.py
+index 0f919a1..961ef2c 100644
+--- a/main.py
++++ b/main.py
+@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query
+ from fastapi.responses import JSONResponse
+ from models import UsageLogsResponse, CostSettings
+ from mock_data import MOCK_LOGS
++from typing import Optional
+ import math
+ 
+ app = FastAPI(
+@@ -26,10 +27,15 @@ def root():
+ @app.get("/api/v1/usage_logs", response_model=UsageLogsResponse)
+ def get_usage_logs(
+     page: int = Query(1, ge=1, description="Page number"),
+-    page_size: int = Query(50, ge=1, le=500, description="Number of items per page")
++    page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
++    limit: Optional[int] = Query(None, ge=1, le=500, description="Alias for page_size"),
++    start_date: Optional[str] = Query(None, description="Start date filter (optional for mock)"),
++    end_date: Optional[str] = Query(None, description="End date filter (optional for mock)")
+ ):
++    effective_page_size = limit if limit is not None else page_size
++    
+     total = len(MOCK_LOGS)
+-    total_pages = math.ceil(total / page_size)
++    total_pages = math.ceil(total / effective_page_size)
+     
+     if page > total_pages and total > 0:
+         return JSONResponse(
+@@ -39,17 +45,19 @@ def get_usage_logs(
+             }
+         )
+     
+-    start_idx = (page - 1) * page_size
+-    end_idx = start_idx + page_size
++    start_idx = (page - 1) * effective_page_size
++    end_idx = start_idx + effective_page_size
+     
+     paginated_logs = MOCK_LOGS[start_idx:end_idx]
++    has_more = page < total_pages
+     
+     return UsageLogsResponse(
+         data=paginated_logs,
+         total=total,
+         page=page,
+-        page_size=page_size,
+-        total_pages=total_pages
++        page_size=effective_page_size,
++        total_pages=total_pages,
++        has_more=has_more
+     )
+ 
+ 
+diff --git a/models.py b/models.py
+index 26a4010..2355760 100644
+--- a/models.py
++++ b/models.py
+@@ -57,6 +57,7 @@ class UsageLogsResponse(BaseModel):
+     page: int
+     page_size: int
+     total_pages: int
++    has_more: bool
+ 
+ 
+ class CostSettings(BaseModel):
+-- 
+2.34.1
+
