@@ -1,0 +1,269 @@
+From 2a1538e3d89bd95939197b1aa72a411ba75b62fa Mon Sep 17 00:00:00 2001
+From: Devin AI <158243242+devin-ai-integration[bot]@users.noreply.github.com>
+Date: Wed, 22 Oct 2025 15:04:53 +0000
+Subject: [PATCH] P6.1: Remove V1.0 Mock API artifacts
+
+Delete obsolete V1.0 Mock API implementation files:
+- main.py (FastAPI mock server)
+- models.py (Pydantic models)
+- mock_data.py (mock data generation)
+
+These files are no longer needed after V2.1 manual merge.
+
+Co-Authored-By: gtorreshuamantica@deloitte.es <gtorreshuamantica@deloitte.es>
+---
+ main.py      | 82 ----------------------------------------------------
+ mock_data.py | 65 -----------------------------------------
+ models.py    | 79 --------------------------------------------------
+ 3 files changed, 226 deletions(-)
+ delete mode 100644 main.py
+ delete mode 100644 mock_data.py
+ delete mode 100644 models.py
+
+diff --git a/main.py b/main.py
+deleted file mode 100644
+index 961ef2c..0000000
+--- a/main.py
++++ /dev/null
+@@ -1,82 +0,0 @@
+-from fastapi import FastAPI, Query
+-from fastapi.responses import JSONResponse
+-from models import UsageLogsResponse, CostSettings
+-from mock_data import MOCK_LOGS
+-from typing import Optional
+-import math
+-
+-app = FastAPI(
+-    title="FinOps Mock Usage Data API",
+-    description="Mock API for serving usage data logs for the FinOps Automation Project",
+-    version="1.0.0"
+-)
+-
+-
+-@app.get("/")
+-def root():
+-    return {
+-        "message": "FinOps Mock Usage Data API",
+-        "version": "1.0.0",
+-        "endpoints": {
+-            "usage_logs": "/api/v1/usage_logs",
+-            "cost_settings": "/api/v1/cost_settings"
+-        }
+-    }
+-
+-
+-@app.get("/api/v1/usage_logs", response_model=UsageLogsResponse)
+-def get_usage_logs(
+-    page: int = Query(1, ge=1, description="Page number"),
+-    page_size: int = Query(50, ge=1, le=500, description="Number of items per page"),
+-    limit: Optional[int] = Query(None, ge=1, le=500, description="Alias for page_size"),
+-    start_date: Optional[str] = Query(None, description="Start date filter (optional for mock)"),
+-    end_date: Optional[str] = Query(None, description="End date filter (optional for mock)")
+-):
+-    effective_page_size = limit if limit is not None else page_size
+-    
+-    total = len(MOCK_LOGS)
+-    total_pages = math.ceil(total / effective_page_size)
+-    
+-    if page > total_pages and total > 0:
+-        return JSONResponse(
+-            status_code=404,
+-            content={
+-                "detail": f"Page {page} not found. Total pages: {total_pages}"
+-            }
+-        )
+-    
+-    start_idx = (page - 1) * effective_page_size
+-    end_idx = start_idx + effective_page_size
+-    
+-    paginated_logs = MOCK_LOGS[start_idx:end_idx]
+-    has_more = page < total_pages
+-    
+-    return UsageLogsResponse(
+-        data=paginated_logs,
+-        total=total,
+-        page=page,
+-        page_size=effective_page_size,
+-        total_pages=total_pages,
+-        has_more=has_more
+-    )
+-
+-
+-@app.get("/api/v1/cost_settings", response_model=CostSettings)
+-def get_cost_settings():
+-    return CostSettings(
+-        acu_base_cost=0.10,
+-        out_of_hours_multiplier=1.5,
+-        business_unit_rates={
+-            "Finance": 1.2,
+-            "Engineering": 1.0,
+-            "Operations": 0.9,
+-            "Marketing": 1.1,
+-            "Sales": 1.15,
+-            "HR": 0.95
+-        }
+-    )
+-
+-
+-if __name__ == "__main__":
+-    import uvicorn
+-    uvicorn.run(app, host="0.0.0.0", port=8000)
+diff --git a/mock_data.py b/mock_data.py
+deleted file mode 100644
+index 8437283..0000000
+--- a/mock_data.py
++++ /dev/null
+@@ -1,65 +0,0 @@
+-import random
+-from datetime import datetime, timedelta
+-from models import UsageLog, SessionOutcome, TaskType
+-
+-
+-def generate_mock_logs(count: int = 1000) -> list[UsageLog]:
+-    logs = []
+-    
+-    business_units = ["Finance", "Engineering", "Operations", "Marketing", "Sales", "HR"]
+-    organizations = [f"org_{i:03d}" for i in range(1, 11)]
+-    projects = [f"proj_{i:03d}" for i in range(1, 51)]
+-    users = [f"user_{i:04d}" for i in range(1, 101)]
+-    
+-    base_time = datetime(2025, 1, 1, 0, 0, 0)
+-    
+-    for i in range(count):
+-        session_id = f"sess_{i:06d}"
+-        user_id = random.choice(users)
+-        organization_id = random.choice(organizations)
+-        project_id = random.choice(projects)
+-        
+-        has_pr = random.random() > 0.3
+-        pull_request_id = f"pr_{random.randint(1, 9999)}" if has_pr else None
+-        
+-        timestamp = base_time + timedelta(
+-            days=random.randint(0, 290),
+-            hours=random.randint(0, 23),
+-            minutes=random.randint(0, 59),
+-            seconds=random.randint(0, 59)
+-        )
+-        
+-        acu_consumed = round(random.uniform(10.0, 500.0), 2)
+-        
+-        business_unit = random.choice(business_units)
+-        task_type = random.choice(list(TaskType))
+-        
+-        hour = timestamp.hour
+-        is_out_of_hours = hour < 8 or hour >= 18 or timestamp.weekday() >= 5
+-        
+-        outcome = random.choice(list(SessionOutcome))
+-        is_merged = outcome == SessionOutcome.SUCCESS and has_pr and random.random() > 0.2
+-        
+-        log = UsageLog(
+-            session_id=session_id,
+-            user_id=user_id,
+-            organization_id=organization_id,
+-            project_id=project_id,
+-            pull_request_id=pull_request_id,
+-            timestamp=timestamp,
+-            acu_consumed=acu_consumed,
+-            business_unit=business_unit,
+-            task_type=task_type,
+-            is_out_of_hours=is_out_of_hours,
+-            is_merged=is_merged,
+-            session_outcome=outcome
+-        )
+-        
+-        logs.append(log)
+-    
+-    logs.sort(key=lambda x: x.timestamp, reverse=True)
+-    
+-    return logs
+-
+-
+-MOCK_LOGS = generate_mock_logs(1000)
+diff --git a/models.py b/models.py
+deleted file mode 100644
+index 2355760..0000000
+--- a/models.py
++++ /dev/null
+@@ -1,79 +0,0 @@
+-from pydantic import BaseModel, Field
+-from typing import Optional
+-from datetime import datetime
+-from enum import Enum
+-
+-
+-class SessionOutcome(str, Enum):
+-    SUCCESS = "Success"
+-    FAILURE = "Failure"
+-    IDLE = "Idle"
+-
+-
+-class TaskType(str, Enum):
+-    BUGFIX = "BugFix"
+-    REFACTOR = "Refactor"
+-    FEATURE = "Feature"
+-    TESTING = "Testing"
+-    DOCUMENTATION = "Documentation"
+-
+-
+-class UsageLog(BaseModel):
+-    session_id: str = Field(..., description="Unique session identifier")
+-    user_id: str = Field(..., description="User identifier")
+-    organization_id: str = Field(..., description="Organization identifier")
+-    project_id: str = Field(..., description="Project identifier")
+-    pull_request_id: Optional[str] = Field(None, description="Pull request identifier if applicable")
+-    timestamp: datetime = Field(..., description="Timestamp of the log entry")
+-    acu_consumed: float = Field(..., description="Agent Compute Units consumed", ge=0)
+-    business_unit: str = Field(..., description="Business unit for tribal cost allocation")
+-    task_type: TaskType = Field(..., description="Type of task being performed")
+-    is_out_of_hours: bool = Field(..., description="Whether the work was done outside business hours")
+-    is_merged: bool = Field(..., description="Whether the PR was merged successfully")
+-    session_outcome: SessionOutcome = Field(..., description="Outcome of the session")
+-
+-    class Config:
+-        json_schema_extra = {
+-            "example": {
+-                "session_id": "sess_abc123",
+-                "user_id": "user_001",
+-                "organization_id": "org_deloitte",
+-                "project_id": "proj_finops",
+-                "pull_request_id": "pr_456",
+-                "timestamp": "2025-10-21T10:00:00Z",
+-                "acu_consumed": 125.5,
+-                "business_unit": "Finance",
+-                "task_type": "BugFix",
+-                "is_out_of_hours": False,
+-                "is_merged": True,
+-                "session_outcome": "Success"
+-            }
+-        }
+-
+-
+-class UsageLogsResponse(BaseModel):
+-    data: list[UsageLog]
+-    total: int
+-    page: int
+-    page_size: int
+-    total_pages: int
+-    has_more: bool
+-
+-
+-class CostSettings(BaseModel):
+-    acu_base_cost: float = Field(..., description="Base cost per ACU")
+-    out_of_hours_multiplier: float = Field(..., description="Cost multiplier for out-of-hours work")
+-    business_unit_rates: dict[str, float] = Field(..., description="Cost rates by business unit")
+-    
+-    class Config:
+-        json_schema_extra = {
+-            "example": {
+-                "acu_base_cost": 0.10,
+-                "out_of_hours_multiplier": 1.5,
+-                "business_unit_rates": {
+-                    "Finance": 1.2,
+-                    "Engineering": 1.0,
+-                    "Operations": 0.9
+-                }
+-            }
+-        }
+-- 
+2.34.1
+
