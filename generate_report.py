@@ -92,63 +92,122 @@ def transform_raw_data(raw_sessions: List[Dict]) -> Dict[str, Any]:
 def flatten_metrics(metrics_dict: Dict[str, Any], config: MetricsConfig) -> List[Dict[str, Any]]:
     """
     Flatten the nested metrics dictionary into a list of rows for CSV export.
+    Creates 63 KPI rows with 6 columns: Métrica, Descripción, Uso FinOps, Pilar, Subpilar, Coste.
     
     Args:
         metrics_dict: Dictionary returned by calculate_all_metrics()
         config: MetricsConfig object with currency information
     
     Returns:
-        List of dictionaries, each representing one metric row
+        List of dictionaries, each representing one KPI row
     """
     rows = []
     metrics = metrics_dict.get('metrics', {})
-    currency = config.currency
     
-    metric_definitions = {
-        '01_total_monthly_cost': ('Total Monthly Cost', currency),
-        '02_total_acus': ('Total ACUs', 'ACUs'),
-        '03_cost_per_user': ('Cost Per User', currency),
-        '04_acus_per_session': ('ACUs Per Session', 'ACUs'),
-        '05_average_acus_per_session': ('Average ACUs Per Session', 'ACUs'),
-        '06_total_sessions': ('Total Sessions', 'sessions'),
-        '07_sessions_per_user': ('Sessions Per User', 'sessions'),
-        '08_total_duration_minutes': ('Total Duration', 'minutes'),
-        '09_average_session_duration': ('Average Session Duration', 'minutes'),
-        '10_acus_per_minute': ('ACUs Per Minute', 'ACUs/min'),
-        '11_cost_per_minute': ('Cost Per Minute', f'{currency}/min'),
-        '12_unique_users': ('Unique Users', 'users'),
-        '13_sessions_by_task_type': ('Sessions By Task Type', 'sessions'),
-        '14_acus_by_task_type': ('ACUs By Task Type', 'ACUs'),
-        '15_cost_by_task_type': ('Cost By Task Type', currency),
-        '16_sessions_by_department': ('Sessions By Department', 'sessions'),
-        '17_acus_by_department': ('ACUs By Department', 'ACUs'),
-        '18_cost_by_department': ('Cost By Department', currency),
-        '19_average_cost_per_user': ('Average Cost Per User', currency),
-        '20_efficiency_ratio': ('Efficiency Ratio', 'ACUs/hour')
-    }
-    
-    for metric_key, (metric_name, unit) in metric_definitions.items():
-        value = metrics.get(metric_key)
-        
+    def aggregate_dict(value):
         if isinstance(value, dict):
-            for sub_key, sub_value in value.items():
-                rows.append({
-                    'metric_name': f"{metric_name} - {sub_key}",
-                    'value': sub_value,
-                    'unit': unit
-                })
-        elif isinstance(value, (int, float)):
-            rows.append({
-                'metric_name': metric_name,
-                'value': value,
-                'unit': unit
-            })
+            return sum(v for v in value.values() if isinstance(v, (int, float)))
+        return value
+
+    kpi_definitions = [
+        {'metrica': 'Coste total mensual', 'metric_key': '01_total_monthly_cost', 'is_calculated': True, 'aggregate': False},
+        {'metrica': 'Coste por organización', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por grupo (IdP)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por usuario', 'metric_key': '03_cost_per_user', 'is_calculated': True, 'aggregate': True},
+        {'metrica': 'Coste por repositorio / PR', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por tipo de tarea', 'metric_key': '15_cost_by_task_type', 'is_calculated': True, 'aggregate': True},
+        {'metrica': 'ACUs consumidos totales', 'metric_key': '02_total_acus', 'is_calculated': True, 'aggregate': False},
+        {'metrica': 'ACUs por usuario', 'metric_key': '03_cost_per_user', 'is_calculated': True, 'aggregate': True, 'divide_by_price': True},
+        {'metrica': 'ACUs por sesión', 'metric_key': '05_average_acus_per_session', 'is_calculated': True, 'aggregate': False},
+        {'metrica': 'Coste por unidad de negocio / tribu / área', 'metric_key': '18_cost_by_department', 'is_calculated': True, 'aggregate': True},
+        {'metrica': 'Coste por proyecto / producto', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% coste compartido (shared)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Costo total Devin', 'metric_key': '01_total_monthly_cost', 'is_calculated': True, 'aggregate': False},
+        {'metrica': 'ACUs por desarrollador', 'metric_key': '03_cost_per_user', 'is_calculated': True, 'aggregate': True, 'divide_by_price': True},
+        {'metrica': '% de consumo trazable (cost allocation)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por plan (Core/Teams)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs promedio por PR mergeado', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs por línea de código', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs por outcome (tarea completada)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ROI por sesión', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% sesiones con outcome', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs por hora productiva', 'metric_key': '20_efficiency_ratio', 'is_calculated': True, 'aggregate': False},
+        {'metrica': '% sesiones reintentadas', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Promedio de PRs por ACU', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Tasa de éxito de PR', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% sesiones sin outcome', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs desperdiciados (sin ROI)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Sesiones idle (>X min)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% tareas redundantes / duplicadas', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Costo por PR mergeado', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Ahorro FinOps (%)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACU Efficiency Index (AEI)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Cost Velocity Ratio (CVR)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Waste-to-Outcome Ratio (WOR)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Ahorro FinOps acumulado', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Lead time con Devin vs humano', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Prompts ineficientes (alto ACU / bajo output)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Prompts eficientes (%)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Prompt Efficiency Index (PEI)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Team Efficiency Spread', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% de usuarios formados en eficiencia de prompts', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs por tipo de usuario', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Días restantes hasta presupuesto agotado', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Over-scope sessions (>N ACUs)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% ACUs usados fuera de horario laboral', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por entorno (Dev/Test/Prod)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% proyectos con límites activos', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% de proyectos con presupuesto definido', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% de proyectos con alertas activas', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Tiempo medio de reacción a alerta 90%', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste incremental PAYG', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'ACUs por sprint / release', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Peak ACU rate', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Costo por entrega (delivery)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Uso presupuestario (%)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Cumplimiento presupuestario', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': '% de proyectos sobre presupuesto', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Desviación forecast vs real', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Tendencia semanal de ACUs', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Estacionalidad de consumo', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Proyección de gasto mensual', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Elasticidad del coste', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Costo incremental por usuario nuevo', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste por cliente (externo)', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+        {'metrica': 'Coste recuperable', 'metric_key': None, 'is_calculated': False, 'aggregate': False},
+    ]
+
+    placeholder_desc = 'Descripción pendiente de definición'
+    placeholder_uso = 'Pendiente de clasificación'
+    placeholder_pilar = 'Por definir'
+    placeholder_subpilar = 'Por definir'
+
+    for kpi in kpi_definitions:
+        row = {
+            'Métrica': kpi['metrica'],
+            'Descripción': placeholder_desc,
+            'Uso FinOps': placeholder_uso,
+            'Pilar': placeholder_pilar,
+            'Subpilar': placeholder_subpilar
+        }
+
+        if kpi['is_calculated'] and kpi['metric_key']:
+            value = metrics.get(kpi['metric_key'])
+
+            if kpi.get('aggregate'):
+                value = aggregate_dict(value)
+
+            if kpi.get('divide_by_price') and value is not None:
+                value = value / config.price_per_acu
+
+            if isinstance(value, float):
+                row['Coste'] = round(value, 2)
+            else:
+                row['Coste'] = value
         else:
-            rows.append({
-                'metric_name': metric_name,
-                'value': str(value),
-                'unit': unit
-            })
+            row['Coste'] = 'N/A'
+
+        rows.append(row)
     
     return rows
 
