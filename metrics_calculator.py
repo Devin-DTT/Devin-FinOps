@@ -4,9 +4,12 @@ This module processes raw usage data and calculates 20 foundational metrics.
 """
 
 import json
+import logging
 from typing import Dict, List, Any
 from collections import defaultdict
 from config import MetricsConfig
+
+logger = logging.getLogger(__name__)
 
 
 class MetricsCalculator:
@@ -39,11 +42,13 @@ class MetricsCalculator:
             FileNotFoundError: If the file doesn't exist
             json.JSONDecodeError: If the file is not valid JSON
         """
+        logger.info(f"Loading data from {json_file_path}")
         with open(json_file_path, 'r') as f:
             self.data = json.load(f)
 
         self.sessions = self.data.get('sessions', [])
         self.users = self.data.get('user_details', [])
+        logger.info(f"Data loaded: {len(self.sessions)} sessions, {len(self.users)} users")
 
     def calculate_total_monthly_cost(self) -> float:
         """
@@ -341,7 +346,9 @@ class MetricsCalculator:
         Returns:
             Dictionary containing all calculated metrics
         """
-        return {
+        logger.info("Starting calculation of all metrics")
+
+        metrics_result = {
             'config': self.config.to_dict(),
             'reporting_period': self.data.get('reporting_period', {}),
             'metrics': {
@@ -367,6 +374,9 @@ class MetricsCalculator:
                 '20_efficiency_ratio': self.calculate_efficiency_ratio()
             }
         }
+
+        logger.info("Metrics calculation complete")
+        return metrics_result
 
 
 def main():

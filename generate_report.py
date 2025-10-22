@@ -15,11 +15,8 @@ from typing import Dict, Any, List
 from collections import defaultdict
 from metrics_calculator import MetricsCalculator
 from config import MetricsConfig
+import data_adapter
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 logger = logging.getLogger(__name__)
 
 
@@ -158,10 +155,19 @@ def flatten_metrics(metrics_dict: Dict[str, Any], config: MetricsConfig) -> List
 
 def main():
     """Main execution function for report generation."""
+    data_adapter.setup_logging()
+
     logger.info("=" * 60)
     logger.info("FinOps Metrics Report Generator - Phase 3")
     logger.info("=" * 60)
     
+    logger.info("Fetching data from Cognition API...")
+    try:
+        data_adapter.main()
+    except Exception as e:
+        logger.error(f"Failed to fetch data from API: {e}")
+        logger.info("Attempting to use existing raw_usage_data.json if available")
+
     raw_data_file = 'raw_usage_data.json'
     output_file = 'finops_metrics_report.csv'
     temp_transformed_file = 'transformed_usage_data.json'
