@@ -23,24 +23,20 @@ logger = logging.getLogger(__name__)
 API_ENDPOINTS = {
     'consumption_cycles': '/consumption/cycles',
     'consumption_daily': '/consumption/daily',
-    'consumption_daily_user': '/consumption/daily/MOCK_USER_ID',
+    'consumption_daily_user': '/consumption/daily/gtorreshuamantica',
     'metrics_prs': '/metrics/prs',
     'metrics_sessions': '/metrics/sessions',
     'metrics_searches': '/metrics/searches',
     'metrics_usage': '/metrics/usage',
     'roles': '/roles',
     'members': '/members',
-    'members_user': '/members/MOCK_USER_ID',
-    'members_user_orgs': '/members/MOCK_USER_ID/organizations',
+    'members_user': '/members/gtorreshuamantica',
+    'members_user_orgs': '/members/gtorreshuamantica/organizations',
     'groups': '/groups',
-    'groups_name': '/groups/MOCK_GROUP_NAME',
-    'git_connections': '/organizations/MOCK_ORG_ID/git/connections',
-    'git_permissions': '/organizations/MOCK_ORG_ID/git/permissions',
     'hypervisors_health': '/hypervisors/health',
     'audit_logs': '/audit-logs',
     'api_keys': '/api-keys',
-    'playbooks': '/playbooks',
-    'playbooks_id': '/playbooks/MOCK_PLAYBOOK_ID'
+    'playbooks': '/playbooks'
 }
 
 
