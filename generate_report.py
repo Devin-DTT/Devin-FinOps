@@ -20,6 +20,30 @@ import data_adapter
 logger = logging.getLogger(__name__)
 
 
+API_ENDPOINTS = {
+    'consumption_cycles': '/consumption/cycles',
+    'consumption_daily': '/consumption/daily',
+    'consumption_daily_user': '/consumption/daily/MOCK_USER_ID',
+    'metrics_prs': '/metrics/prs',
+    'metrics_sessions': '/metrics/sessions',
+    'metrics_searches': '/metrics/searches',
+    'metrics_usage': '/metrics/usage',
+    'roles': '/roles',
+    'members': '/members',
+    'members_user': '/members/MOCK_USER_ID',
+    'members_user_orgs': '/members/MOCK_USER_ID/organizations',
+    'groups': '/groups',
+    'groups_name': '/groups/MOCK_GROUP_NAME',
+    'git_connections': '/organizations/MOCK_ORG_ID/git/connections',
+    'git_permissions': '/organizations/MOCK_ORG_ID/git/permissions',
+    'hypervisors_health': '/hypervisors/health',
+    'audit_logs': '/audit-logs',
+    'api_keys': '/api-keys',
+    'playbooks': '/playbooks',
+    'playbooks_id': '/playbooks/MOCK_PLAYBOOK_ID'
+}
+
+
 def transform_raw_data(raw_sessions: List[Dict]) -> Dict[str, Any]:
     """
     Transform raw usage data into the format expected by MetricsCalculator.
@@ -219,6 +243,15 @@ def main():
     logger.info("=" * 60)
     logger.info("FinOps Metrics Report Generator - Phase 3")
     logger.info("=" * 60)
+    
+    logger.info("Fetching data from all Enterprise API endpoints...")
+    try:
+        all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
+        data_adapter.save_raw_data(all_api_data)
+        logger.info("Multi-endpoint data fetch completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to fetch multi-endpoint data: {e}")
+        logger.info("Continuing with report generation using existing data if available")
     
     logger.info("Fetching data from Cognition API...")
     try:
