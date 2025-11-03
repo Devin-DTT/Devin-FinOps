@@ -26,10 +26,10 @@ def generate_html_dashboard(
     logger.info("Generating HTML dashboard...")
     
     daily_dates = [item['Date'] for item in daily_chart_data] if daily_chart_data else []
-    daily_acus = [item['ACUs'] for item in daily_chart_data] if daily_chart_data else []
+    daily_acus = [round(item['ACUs'], 2) for item in daily_chart_data] if daily_chart_data else []
     
     user_ids = [item['User ID'] for item in user_chart_data] if user_chart_data else []
-    user_acus = [item['ACUs'] for item in user_chart_data] if user_chart_data else []
+    user_acus = [round(item['ACUs'], 2) for item in user_chart_data] if user_chart_data else []
     
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -131,7 +131,7 @@ def generate_html_dashboard(
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-label">Total ACUs Consumed</div>
-                <div class="metric-value">{summary_data['total_acus']}<span class="metric-unit">ACUs</span></div>
+                <div class="metric-value">{summary_data['total_acus']:.2f}<span class="metric-unit">ACUs</span></div>
             </div>
             <div class="metric-card">
                 <div class="metric-label">Total Cost</div>
