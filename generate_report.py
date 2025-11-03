@@ -139,7 +139,7 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     logger.info(f"  - Total endpoints: {len(rows)}")
     logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
 
-def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig, all_api_data: Dict[str, Dict[str, Any]] = None) -> None:
+def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig, all_api_data: Dict[str, Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Display final business summary with ASCII formatting using print().
     
@@ -147,6 +147,9 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
         consumption_data: Dictionary containing metrics and reporting_period
         config: MetricsConfig object with pricing information
         all_api_data: Dictionary of API results from fetch_api_data()
+    
+    Returns:
+        Dictionary containing summary metrics for HTML dashboard generation
     """
     metrics = consumption_data.get('metrics', {})
     reporting_period = consumption_data.get('reporting_period', {})
@@ -179,6 +182,34 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
             except (json.JSONDecodeError, AttributeError, TypeError) as e:
                 logger.warning(f"Failed to extract consumption_daily metrics: {e}")
     
+    total_prs_merged = 0
+    if all_api_data:
+        metrics_prs_endpoint = all_api_data.get('metrics_prs', {})
+        if metrics_prs_endpoint.get('status_code') == 200:
+            try:
+                prs_response = metrics_prs_endpoint.get('response', {})
+                if isinstance(prs_response, str):
+                    prs_response = json.loads(prs_response)
+                if isinstance(prs_response, dict):
+                    total_prs_merged = prs_response.get('prs_merged', 0)
+                    logger.info(f"Extracted PR metrics: {total_prs_merged} PRs merged")
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                logger.warning(f"Failed to extract metrics_prs data: {e}")
+    
+    total_sessions_count = 0
+    if all_api_data:
+        metrics_sessions_endpoint = all_api_data.get('metrics_sessions', {})
+        if metrics_sessions_endpoint.get('status_code') == 200:
+            try:
+                sessions_response = metrics_sessions_endpoint.get('response', {})
+                if isinstance(sessions_response, str):
+                    sessions_response = json.loads(sessions_response)
+                if isinstance(sessions_response, dict):
+                    total_sessions_count = sessions_response.get('sessions_count', 0)
+                    logger.info(f"Extracted session metrics: {total_sessions_count} sessions")
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                logger.warning(f"Failed to extract metrics_sessions data: {e}")
+    
     if total_acus == 0:
         total_sessions = metrics.get('06_total_sessions', 0)
         total_acus = metrics.get('02_total_acus', 0)
@@ -191,6 +222,8 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     num_days = 31
     
     average_acus_per_day = total_acus / num_days if num_days > 0 else 0
+    
+    cost_per_pr = total_cost / total_prs_merged if total_prs_merged > 0 else 0
     
     print("\n")
     print("=" * 70)
@@ -211,6 +244,9 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     print("-" * 70)
     print(f"  Total ACUs Consumed:               {total_acus}")
     print(f"  Total Cost:                        {total_cost:.2f} {config.currency}")
+    print(f"  Total PRs Merged:                  {total_prs_merged}")
+    print(f"  Total Sessions Count:              {total_sessions_count}")
+    print(f"  Cost Per PR Merged:                {cost_per_pr:.2f} {config.currency if total_prs_merged > 0 else 'N/A'}")
     print(f"  Unique Users:                      {unique_users}")
     print(f"  Reporting Period:                  {start_date} to {end_date}")
     print(f"  Number of Days:                    {num_days}")
@@ -222,6 +258,20 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     print("*" * 70)
     print("=" * 70)
     print("\n")
+    
+    return {
+        'total_acus': total_acus,
+        'total_cost': total_cost,
+        'total_prs_merged': total_prs_merged,
+        'total_sessions_count': total_sessions_count,
+        'cost_per_pr': cost_per_pr,
+        'unique_users': unique_users,
+        'start_date': start_date,
+        'end_date': end_date,
+        'num_days': num_days,
+        'average_acus_per_day': average_acus_per_day,
+        'currency': config.currency
+    }
 
 
 
@@ -323,12 +373,37 @@ def main():
     
     logger.info("Fetching data from all Enterprise API endpoints...")
     all_api_data = None
+    daily_chart_data = []
+    user_chart_data = []
+    
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
         data_adapter.save_raw_data(all_api_data)
         create_summary_csv(all_api_data)
         generate_consumption_summary(all_api_data)
         logger.info("Multi-endpoint data fetch completed successfully")
+        
+        if all_api_data:
+            consumption_endpoint = all_api_data.get('consumption_daily', {})
+            if consumption_endpoint.get('status_code') == 200:
+                try:
+                    response_data = consumption_endpoint.get('response', {})
+                    if isinstance(response_data, str):
+                        response_data = json.loads(response_data)
+                    
+                    if isinstance(response_data, dict):
+                        consumption_by_date = response_data.get('consumption_by_date', {})
+                        for date, acus in consumption_by_date.items():
+                            daily_chart_data.append({'Date': date, 'ACUs': acus})
+                        
+                        consumption_by_user = response_data.get('consumption_by_user', {})
+                        for user_id, acus in consumption_by_user.items():
+                            user_chart_data.append({'User ID': user_id, 'ACUs': acus})
+                        
+                        logger.info(f"Prepared chart data: {len(daily_chart_data)} daily records, {len(user_chart_data)} users")
+                except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to prepare chart data: {e}")
+        
     except Exception as e:
         logger.error(f"Failed to fetch multi-endpoint data: {e}")
         logger.info("Continuing with report generation using existing data if available")
@@ -365,11 +440,14 @@ def main():
     logger.info("Calculating all 20 metrics...")
     all_metrics = calculator.calculate_all_metrics()
     
-    generate_business_summary(all_metrics, config, all_api_data)
+    summary_data = generate_business_summary(all_metrics, config, all_api_data)
     
     export_daily_acus_to_csv()
     
     export_summary_to_excel(all_metrics, config, all_api_data)
+    
+    from html_dashboard import generate_html_dashboard
+    generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
 
 
 if __name__ == '__main__':
