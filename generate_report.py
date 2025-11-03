@@ -18,6 +18,7 @@ from metrics_calculator import MetricsCalculator
 from config import MetricsConfig
 import data_adapter
 from export_metrics import export_daily_acus_to_csv
+from export_metrics_summary import export_summary_to_excel
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +345,8 @@ def main():
     generate_business_summary(all_metrics, config)
     
     export_daily_acus_to_csv()
+    
+    export_summary_to_excel(all_metrics, config)
 
 
 if __name__ == '__main__':
