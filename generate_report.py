@@ -259,6 +259,70 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     logger.info(f"  - Total endpoints: {len(rows)}")
     logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
 
+def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig) -> None:
+    """
+    Display final business summary with ASCII formatting using print().
+    
+    Args:
+        consumption_data: Dictionary containing metrics and reporting_period
+        config: MetricsConfig object with pricing information
+    """
+    metrics = consumption_data.get('metrics', {})
+    reporting_period = consumption_data.get('reporting_period', {})
+    
+    total_sessions = metrics.get('06_total_sessions', 0)
+    total_acus = metrics.get('02_total_acus', 0)
+    total_cost = metrics.get('01_total_monthly_cost', 0)
+    unique_users = metrics.get('12_unique_users', 0)
+    
+    start_date = reporting_period.get('start_date', 'N/A')
+    end_date = reporting_period.get('end_date', 'N/A')
+    
+    num_days = 1
+    if start_date != 'N/A' and end_date != 'N/A':
+        try:
+            from datetime import datetime
+            start = datetime.strptime(start_date, '%Y-%m-%d')
+            end = datetime.strptime(end_date, '%Y-%m-%d')
+            num_days = max(1, (end - start).days + 1)
+        except:
+            num_days = 1
+    
+    average_acus_per_day = total_acus / num_days if num_days > 0 else 0
+    
+    print("\n")
+    print("=" * 70)
+    print("*" * 70)
+    print("**" + " " * 66 + "**")
+    print("**" + " " * 20 + "BUSINESS SUMMARY" + " " * 30 + "**")
+    print("**" + " " * 66 + "**")
+    print("*" * 70)
+    print("=" * 70)
+    print("\n")
+    print("KEY METRICS FROM REAL DATA:")
+    print("-" * 70)
+    print(f"  Total_Daily_Consumption_Records:  {total_sessions}")
+    print(f"  Average_ACUs_Per_Day:              {average_acus_per_day:.2f}")
+    print("-" * 70)
+    print("\n")
+    print("ADDITIONAL STATISTICS:")
+    print("-" * 70)
+    print(f"  Total ACUs Consumed:               {total_acus}")
+    print(f"  Total Cost:                        {total_cost:.2f} {config.currency}")
+    print(f"  Unique Users:                      {unique_users}")
+    print(f"  Reporting Period:                  {start_date} to {end_date}")
+    print(f"  Number of Days:                    {num_days}")
+    print("-" * 70)
+    print("\n")
+    print("=" * 70)
+    print("*" * 70)
+    print("**" + " " * 18 + "REPORT COMPLETED SUCCESSFULLY" + " " * 19 + "**")
+    print("*" * 70)
+    print("=" * 70)
+    print("\n")
+
+
+
 
 def generate_business_summary(raw_data: Dict[str, Dict[str, Any]]) -> None:
     """
@@ -394,15 +458,7 @@ def main():
     num_metrics = len(df)
     logger.info(f"Report created successfully with {num_metrics} metric entries")
     
-    logger.info("\nSummary Statistics:")
-    logger.info(f"  - Total Sessions: {all_metrics['metrics']['06_total_sessions']}")
-    logger.info(f"  - Total ACUs: {all_metrics['metrics']['02_total_acus']}")
-    logger.info(f"  - Total Cost: {all_metrics['metrics']['01_total_monthly_cost']:.2f} {config.currency}")
-    logger.info(f"  - Unique Users: {all_metrics['metrics']['12_unique_users']}")
-    
-    logger.info("\n" + "=" * 60)
-    logger.info("Report generation completed successfully!")
-    logger.info("=" * 60)
+    generate_business_summary(all_metrics, config)
     
     return output_file
 
