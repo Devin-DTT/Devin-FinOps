@@ -231,10 +231,10 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
                 'response': response_data
             }
             
-            logger.info(f"  └─ Status: {status_code}")
+            logger.info(f"    - Status: {status_code}")
             
         except requests.exceptions.Timeout:
-            logger.error(f"  └─ Timeout error for {endpoint_name}")
+            logger.error(f"    - Timeout error for {endpoint_name}")
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,
@@ -243,7 +243,7 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
                 'response': 'Request timeout'
             }
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"  └─ Connection error for {endpoint_name}: {e}")
+            logger.error(f"    - Connection error for {endpoint_name}: {e}")
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,
@@ -252,7 +252,7 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
                 'response': str(e)
             }
         except Exception as e:
-            logger.error(f"  └─ Error for {endpoint_name}: {e}")
+            logger.error(f"    - Error for {endpoint_name}: {e}")
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,

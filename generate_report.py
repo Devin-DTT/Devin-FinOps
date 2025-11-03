@@ -458,7 +458,7 @@ def main():
     num_metrics = len(df)
     logger.info(f"Report created successfully with {num_metrics} metric entries")
     
-    generate_business_summary(all_metrics, config)
+    generate_business_summary(all_metrics)
     
     return output_file
 
