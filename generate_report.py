@@ -36,19 +36,20 @@ API_ENDPOINTS = {
     'members_user': '/members/gtorreshuamantica',
     'members_user_orgs': '/members/gtorreshuamantica/organizations',
     'groups': '/groups',
-    'hypervisors_health': '/hypervisors/health',
     'audit_logs': '/audit-logs',
     'api_keys': '/api-keys',
     'playbooks': '/playbooks'
 }
 
 
-def transform_raw_data(raw_sessions: List[Dict]) -> Dict[str, Any]:
+def transform_raw_data(raw_sessions: List[Dict], start_date: str = '2025-01-01', end_date: str = '2025-01-31') -> Dict[str, Any]:
     """
     Transform raw usage data into the format expected by MetricsCalculator.
     
     Args:
         raw_sessions: List of session dictionaries from raw_usage_data.json
+        start_date: Start date for reporting period (YYYY-MM-DD)
+        end_date: End date for reporting period (YYYY-MM-DD)
     
     Returns:
         Dictionary with 'sessions', 'user_details', and 'reporting_period' keys
@@ -92,13 +93,13 @@ def transform_raw_data(raw_sessions: List[Dict]) -> Dict[str, Any]:
     ]
     
     timestamps.sort()
-    start_date = timestamps[0][:10] if timestamps else '2025-01-01'
-    end_date = timestamps[-1][:10] if timestamps else '2025-01-31'
+    period_start = start_date
+    period_end = end_date
     
     reporting_period = {
-        'start_date': start_date,
-        'end_date': end_date,
-        'month': f"{start_date} to {end_date}"
+        'start_date': period_start,
+        'end_date': period_end,
+        'month': f"{period_start} to {period_end}"
     }
     
     transformed_data = {
@@ -326,7 +327,7 @@ def main():
     
     logger.info(f"Loaded {len(raw_sessions)} raw sessions")
     
-    transformed_data = transform_raw_data(raw_sessions)
+    transformed_data = transform_raw_data(raw_sessions, start_date=args.start, end_date=args.end)
     
     with open(temp_transformed_file, 'w') as f:
         json.dump(transformed_data, f, indent=2)
