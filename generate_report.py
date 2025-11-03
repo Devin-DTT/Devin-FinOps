@@ -232,6 +232,34 @@ def flatten_metrics(metrics_dict: Dict[str, Any], config: MetricsConfig) -> List
     return rows
 
 
+def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = 'api_health_report.csv') -> None:
+    """
+    Create a CSV summary of API health check results.
+    
+    Args:
+        raw_data: Dictionary of API results from fetch_api_data()
+        output_file: Output CSV filename
+    """
+    logger.info(f"Creating API health report CSV with {len(raw_data)} endpoints...")
+    
+    rows = []
+    for endpoint_name, endpoint_data in raw_data.items():
+        row = {
+            'endpoint_name': endpoint_name,
+            'full_url': endpoint_data.get('full_url', ''),
+            'status_code': endpoint_data.get('status_code', ''),
+            'timestamp': endpoint_data.get('timestamp', '')
+        }
+        rows.append(row)
+    
+    df = pd.DataFrame(rows)
+    df.to_csv(output_file, index=False)
+    
+    logger.info(f"API health report saved to {output_file}")
+    logger.info(f"  - Total endpoints: {len(rows)}")
+    logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
+
+
 def main():
     """Main execution function for report generation."""
     data_adapter.setup_logging()
@@ -244,6 +272,7 @@ def main():
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
         data_adapter.save_raw_data(all_api_data)
+        create_summary_csv(all_api_data)
         logger.info("Multi-endpoint data fetch completed successfully")
     except Exception as e:
         logger.error(f"Failed to fetch multi-endpoint data: {e}")
