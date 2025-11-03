@@ -260,6 +260,77 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
 
 
+def generate_business_summary(raw_data: Dict[str, Dict[str, Any]]) -> None:
+    """
+    Generate and print a business summary from consumption data.
+    
+    Args:
+        raw_data: Dictionary of API results from fetch_api_data()
+    """
+    logger.info("Generating business summary from consumption data...")
+    
+    consumption_endpoint = raw_data.get('consumption_daily', {})
+    status_code = consumption_endpoint.get('status_code')
+    
+    summary = {
+        'Total_Daily_Consumption_Records': 0,
+        'Average_ACUs_Per_Day': 0.0
+    }
+    
+    if status_code != 200:
+        logger.warning(f"Consumption endpoint returned status {status_code}, using default values")
+        print("\n" + "=" * 60)
+        print("Business Summary (Consumption Data)")
+        print("=" * 60)
+        print(f"Status: API returned {status_code} - No data available")
+        print(f"Summary: {summary}")
+        print("=" * 60 + "\n")
+        return
+    
+    try:
+        response_str = consumption_endpoint.get('response', '[]')
+        consumption_data = json.loads(response_str) if isinstance(response_str, str) else response_str
+        
+        if not consumption_data or not isinstance(consumption_data, list):
+            logger.info("No consumption records found or invalid format")
+            print("\n" + "=" * 60)
+            print("Business Summary (Consumption Data)")
+            print("=" * 60)
+            print("Status: No consumption records available")
+            print(f"Summary: {summary}")
+            print("=" * 60 + "\n")
+            return
+        
+        total_records = len(consumption_data)
+        total_acus = 0
+        
+        for record in consumption_data:
+            acus = record.get('acus', record.get('acu_consumed', record.get('total_acus', 0)))
+            total_acus += acus
+        
+        avg_acus = total_acus / total_records if total_records > 0 else 0.0
+        
+        summary = {
+            'Total_Daily_Consumption_Records': total_records,
+            'Average_ACUs_Per_Day': round(avg_acus, 2)
+        }
+        
+        logger.info(f"Business summary calculated: {total_records} records, {avg_acus:.2f} avg ACUs/day")
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse consumption data: {e}")
+        logger.info("Using default values for summary")
+    except Exception as e:
+        logger.error(f"Error processing consumption data: {e}")
+        logger.info("Using default values for summary")
+    
+    print("\n" + "=" * 60)
+    print("Business Summary (Consumption Data)")
+    print("=" * 60)
+    print(f"Summary: {summary}")
+    print("=" * 60 + "\n")
+
+
 def main():
     """Main execution function for report generation."""
     data_adapter.setup_logging()
@@ -273,6 +344,7 @@ def main():
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
         data_adapter.save_raw_data(all_api_data)
         create_summary_csv(all_api_data)
+        generate_business_summary(all_api_data)
         logger.info("Multi-endpoint data fetch completed successfully")
     except Exception as e:
         logger.error(f"Failed to fetch multi-endpoint data: {e}")
