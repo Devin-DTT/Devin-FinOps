@@ -4,6 +4,7 @@ Provides functionality to export business summary data to Excel with professiona
 """
 
 import logging
+import json
 from typing import Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 def export_summary_to_excel(
     consumption_data: Dict[str, Any],
     config: Any,
+    all_api_data: Dict[str, Dict[str, Any]] = None,
     output_filename: str = 'finops_summary_report.xlsx'
 ) -> None:
     """
@@ -31,10 +33,39 @@ def export_summary_to_excel(
         metrics = consumption_data.get('metrics', {})
         reporting_period = consumption_data.get('reporting_period', {})
         
-        total_sessions = metrics.get('06_total_sessions', 0)
-        total_acus = metrics.get('02_total_acus', 0)
-        total_cost = metrics.get('01_total_monthly_cost', 0)
-        unique_users = metrics.get('12_unique_users', 0)
+        total_sessions = 0
+        total_acus = 0
+        total_cost = 0
+        unique_users = 0
+        
+        if all_api_data:
+            consumption_endpoint = all_api_data.get('consumption_daily', {})
+            status_code = consumption_endpoint.get('status_code')
+            
+            if status_code == 200:
+                try:
+                    response_data = consumption_endpoint.get('response', {})
+                    if isinstance(response_data, str):
+                        response_data = json.loads(response_data)
+                    
+                    if isinstance(response_data, dict):
+                        total_acus = response_data.get('total_acus', 0)
+                        consumption_by_date = response_data.get('consumption_by_date', {})
+                        consumption_by_user = response_data.get('consumption_by_user', {})
+                        
+                        total_sessions = len(consumption_by_date)
+                        unique_users = len(consumption_by_user)
+                        total_cost = total_acus * config.price_per_acu
+                        
+                        logger.info(f"Extracted metrics from consumption_daily for Excel: {total_acus} ACUs, {total_sessions} records, {unique_users} users")
+                except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to extract consumption_daily metrics for Excel: {e}")
+        
+        if total_acus == 0:
+            total_sessions = metrics.get('06_total_sessions', 0)
+            total_acus = metrics.get('02_total_acus', 0)
+            total_cost = metrics.get('01_total_monthly_cost', 0)
+            unique_users = metrics.get('12_unique_users', 0)
         
         start_date = reporting_period.get('start_date', 'N/A')
         end_date = reporting_period.get('end_date', 'N/A')

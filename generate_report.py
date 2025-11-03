@@ -369,7 +369,7 @@ def main():
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config)
+    export_summary_to_excel(all_metrics, config, all_api_data)
 
 
 if __name__ == '__main__':
