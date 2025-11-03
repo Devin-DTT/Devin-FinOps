@@ -252,7 +252,7 @@ def generate_html_dashboard(
     
     output_file = 'finops_dashboard.html'
     try:
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         logger.info(f"Successfully generated {output_file}")
         print(f"\n✓ HTML dashboard generated: {output_file}")
