@@ -42,7 +42,9 @@ def fetch_cognition_data(
     base_url: str = "https://api.devin.ai/v2/enterprise",
     endpoint: str = "/consumption/daily",
     api_key: Optional[str] = None,
-    page_size: int = 100
+    page_size: int = 100,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Fetch usage data from Cognition API with pagination.
@@ -91,6 +93,11 @@ def fetch_cognition_data(
                 'skip': skip,
                 'limit': page_size
             }
+            
+            if start_date:
+                params['start_date'] = start_date
+            if end_date:
+                params['end_date'] = end_date
 
             logger.info(f"Fetching page {page_count} (skip={skip}, limit={page_size})")
 
@@ -286,16 +293,19 @@ def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.jso
         raise
 
 
-def main():
+def main(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Main execution function for data adapter."""
     setup_logging()
 
     logger.info("=" * 60)
     logger.info("FinOps Data Adapter - Cognition API Integration")
     logger.info("=" * 60)
+    
+    if start_date or end_date:
+        logger.info(f"Date range filter: {start_date} to {end_date}")
 
     try:
-        data = fetch_cognition_data()
+        data = fetch_cognition_data(start_date=start_date, end_date=end_date)
 
         write_raw_data(data)
 

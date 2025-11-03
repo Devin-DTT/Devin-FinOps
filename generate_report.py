@@ -10,12 +10,14 @@ and exports the results to a CSV file.
 import json
 import logging
 import pandas as pd
+import argparse
 from datetime import datetime
 from typing import Dict, Any, List
 from collections import defaultdict
 from metrics_calculator import MetricsCalculator
 from config import MetricsConfig
 import data_adapter
+from export_metrics import export_daily_acus_to_csv
 
 logger = logging.getLogger(__name__)
 
@@ -274,11 +276,27 @@ def generate_consumption_summary(raw_data: Dict[str, Dict[str, Any]]) -> None:
 
 def main():
     """Main execution function for report generation."""
+    parser = argparse.ArgumentParser(description='Generate FinOps metrics report')
+    parser.add_argument(
+        '--start',
+        type=str,
+        default='2025-10-01',
+        help='Start date for reporting period (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--end',
+        type=str,
+        default='2025-10-31',
+        help='End date for reporting period (YYYY-MM-DD)'
+    )
+    args = parser.parse_args()
+    
     data_adapter.setup_logging()
 
     logger.info("=" * 60)
     logger.info("FinOps Metrics Report Generator - Phase 3")
     logger.info("=" * 60)
+    logger.info(f"Date range: {args.start} to {args.end}")
     
     logger.info("Fetching data from all Enterprise API endpoints...")
     try:
@@ -293,7 +311,7 @@ def main():
     
     logger.info("Fetching data from Cognition API...")
     try:
-        data_adapter.main()
+        data_adapter.main(start_date=args.start, end_date=args.end)
     except Exception as e:
         logger.error(f"Failed to fetch data from API: {e}")
         logger.info("Attempting to use existing raw_usage_data.json if available")
@@ -324,6 +342,8 @@ def main():
     all_metrics = calculator.calculate_all_metrics()
     
     generate_business_summary(all_metrics, config)
+    
+    export_daily_acus_to_csv()
 
 
 if __name__ == '__main__':
