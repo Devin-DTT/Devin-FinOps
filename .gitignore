@@ -27,3 +27,8 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Environment variables and secrets
+.envrc
+.env
+*.env
