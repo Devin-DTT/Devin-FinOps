@@ -36,7 +36,6 @@ API_ENDPOINTS = {
     'members_user': '/members/gtorreshuamantica',
     'members_user_orgs': '/members/gtorreshuamantica/organizations',
     'groups': '/groups',
-    'audit_logs': '/audit-logs',
     'api_keys': '/api-keys',
     'playbooks': '/playbooks'
 }
