@@ -139,34 +139,56 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     logger.info(f"  - Total endpoints: {len(rows)}")
     logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
 
-def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig) -> None:
+def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig, all_api_data: Dict[str, Dict[str, Any]] = None) -> None:
     """
     Display final business summary with ASCII formatting using print().
     
     Args:
         consumption_data: Dictionary containing metrics and reporting_period
         config: MetricsConfig object with pricing information
+        all_api_data: Dictionary of API results from fetch_api_data()
     """
     metrics = consumption_data.get('metrics', {})
     reporting_period = consumption_data.get('reporting_period', {})
     
-    total_sessions = metrics.get('06_total_sessions', 0)
-    total_acus = metrics.get('02_total_acus', 0)
-    total_cost = metrics.get('01_total_monthly_cost', 0)
-    unique_users = metrics.get('12_unique_users', 0)
+    total_sessions = 0
+    total_acus = 0
+    total_cost = 0
+    unique_users = 0
+    
+    if all_api_data:
+        consumption_endpoint = all_api_data.get('consumption_daily', {})
+        status_code = consumption_endpoint.get('status_code')
+        
+        if status_code == 200:
+            try:
+                response_data = consumption_endpoint.get('response', {})
+                if isinstance(response_data, str):
+                    response_data = json.loads(response_data)
+                
+                if isinstance(response_data, dict):
+                    total_acus = response_data.get('total_acus', 0)
+                    consumption_by_date = response_data.get('consumption_by_date', {})
+                    consumption_by_user = response_data.get('consumption_by_user', {})
+                    
+                    total_sessions = len(consumption_by_date)
+                    unique_users = len(consumption_by_user)
+                    total_cost = total_acus * config.price_per_acu
+                    
+                    logger.info(f"Extracted metrics from consumption_daily: {total_acus} ACUs, {total_sessions} records, {unique_users} users")
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                logger.warning(f"Failed to extract consumption_daily metrics: {e}")
+    
+    if total_acus == 0:
+        total_sessions = metrics.get('06_total_sessions', 0)
+        total_acus = metrics.get('02_total_acus', 0)
+        total_cost = metrics.get('01_total_monthly_cost', 0)
+        unique_users = metrics.get('12_unique_users', 0)
     
     start_date = reporting_period.get('start_date', 'N/A')
     end_date = reporting_period.get('end_date', 'N/A')
     
-    num_days = 1
-    if start_date != 'N/A' and end_date != 'N/A':
-        try:
-            from datetime import datetime
-            start = datetime.strptime(start_date, '%Y-%m-%d')
-            end = datetime.strptime(end_date, '%Y-%m-%d')
-            num_days = max(1, (end - start).days + 1)
-        except:
-            num_days = 1
+    num_days = 31
     
     average_acus_per_day = total_acus / num_days if num_days > 0 else 0
     
@@ -300,6 +322,7 @@ def main():
     logger.info(f"Date range: {args.start} to {args.end}")
     
     logger.info("Fetching data from all Enterprise API endpoints...")
+    all_api_data = None
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
         data_adapter.save_raw_data(all_api_data)
@@ -342,7 +365,7 @@ def main():
     logger.info("Calculating all 20 metrics...")
     all_metrics = calculator.calculate_all_metrics()
     
-    generate_business_summary(all_metrics, config)
+    generate_business_summary(all_metrics, config, all_api_data)
     
     export_daily_acus_to_csv()
     
