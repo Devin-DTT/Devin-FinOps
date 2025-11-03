@@ -259,16 +259,17 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     logger.info(f"  - Total endpoints: {len(rows)}")
     logger.info(f"  - Columns: endpoint_name, full_url, status_code, timestamp")
 
-def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig) -> None:
+def generate_business_summary(consumption_data: Dict[str, Any]) -> None:
     """
     Display final business summary with ASCII formatting using print().
     
     Args:
-        consumption_data: Dictionary containing metrics and reporting_period
-        config: MetricsConfig object with pricing information
+        consumption_data: Dictionary containing metrics, reporting_period, and config
     """
     metrics = consumption_data.get('metrics', {})
     reporting_period = consumption_data.get('reporting_period', {})
+    config_dict = consumption_data.get('config', {})
+    currency = config_dict.get('currency', 'USD')
     
     total_sessions = metrics.get('06_total_sessions', 0)
     total_acus = metrics.get('02_total_acus', 0)
@@ -308,7 +309,7 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     print("ADDITIONAL STATISTICS:")
     print("-" * 70)
     print(f"  Total ACUs Consumed:               {total_acus}")
-    print(f"  Total Cost:                        {total_cost:.2f} {config.currency}")
+    print(f"  Total Cost:                        {total_cost:.2f} {currency}")
     print(f"  Unique Users:                      {unique_users}")
     print(f"  Reporting Period:                  {start_date} to {end_date}")
     print(f"  Number of Days:                    {num_days}")
@@ -342,13 +343,6 @@ def main():
         logger.error(f"Failed to fetch multi-endpoint data: {e}")
         logger.info("Continuing with report generation using existing data if available")
     
-    logger.info("Fetching data from Cognition API...")
-    try:
-        data_adapter.main()
-    except Exception as e:
-        logger.error(f"Failed to fetch data from API: {e}")
-        logger.info("Attempting to use existing raw_usage_data.json if available")
-
     raw_data_file = 'raw_usage_data.json'
     output_file = 'finops_metrics_report.csv'
     temp_transformed_file = 'transformed_usage_data.json'
@@ -386,7 +380,7 @@ def main():
     num_metrics = len(df)
     logger.info(f"Report created successfully with {num_metrics} metric entries")
     
-    generate_business_summary(all_metrics, config)
+    generate_business_summary(all_metrics)
     
     return output_file
 
