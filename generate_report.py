@@ -262,6 +262,7 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     return {
         'total_acus': total_acus,
         'total_cost': total_cost,
+        'total_cost_previous_month': 0,  # Placeholder: API does not support previous month data yet
         'total_prs_merged': total_prs_merged,
         'total_sessions_count': total_sessions_count,
         'cost_per_pr': cost_per_pr,

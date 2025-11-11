@@ -135,8 +135,6 @@ def export_summary_to_excel(
         row += 1
         
         additional_stats = [
-            ("Total ACUs Consumed", total_acus, "ACUs"),
-            ("Total Cost", round(total_cost, 2), config.currency),
             ("Unique Users", unique_users, "Users"),
             ("Reporting Period Start", start_date, "Date"),
             ("Reporting Period End", end_date, "Date"),
@@ -144,6 +142,31 @@ def export_summary_to_excel(
         ]
         
         for metric_name, value, unit in additional_stats:
+            ws[f'A{row}'] = metric_name
+            ws[f'B{row}'] = value
+            ws[f'C{row}'] = unit
+            row += 1
+        
+        row += 1
+        ws[f'A{row}'] = "COST VISIBILITY AND TRANSPARENCY"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
+        total_cost_previous_month = 0
+        
+        cost_visibility_metrics = [
+            ("Total Monthly Cost", round(total_cost, 2), config.currency),
+            ("Total Previous Month Cost", total_cost_previous_month, config.currency),
+            ("Cost by User", "See detailed breakdown sheet", "Reference"),
+            ("Cost by Repository/PR", "See detailed breakdown sheet", "Reference"),
+            ("Cost by Task Type", "See detailed breakdown sheet", "Reference"),
+            ("Cost by Organization", "N/A - Data not available", "N/A"),
+            ("Cost per Group (IdP)", "N/A - Data not available", "N/A"),
+        ]
+        
+        for metric_name, value, unit in cost_visibility_metrics:
             ws[f'A{row}'] = metric_name
             ws[f'B{row}'] = value
             ws[f'C{row}'] = unit
