@@ -225,6 +225,9 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     
     cost_per_pr = total_cost / total_prs_merged if total_prs_merged > 0 else 0
     
+    acus_per_session = total_acus / total_sessions_count if total_sessions_count > 0 else 0
+    acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
+    
     print("\n")
     print("=" * 70)
     print("*" * 70)
@@ -262,7 +265,7 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     return {
         'total_acus': total_acus,
         'total_cost': total_cost,
-        'total_cost_previous_month': 0,  # Placeholder: API does not support previous month data yet
+        'total_cost_previous_month': 0,
         'total_prs_merged': total_prs_merged,
         'total_sessions_count': total_sessions_count,
         'cost_per_pr': cost_per_pr,
@@ -271,6 +274,8 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
         'end_date': end_date,
         'num_days': num_days,
         'average_acus_per_day': average_acus_per_day,
+        'acus_per_session': acus_per_session,
+        'acus_per_developer': acus_per_developer,
         'currency': config.currency
     }
 
