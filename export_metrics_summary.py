@@ -289,6 +289,43 @@ def export_summary_to_excel(
                 ws[f'B{row}'].number_format = '0.00'
             row += 1
         
+        row += 1
+        ws[f'A{row}'] = "FORECAST"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
+        acus_por_mes = round(total_acus, 2) if total_acus > 0 else "N/A"
+        
+        forecast_metrics = [
+            ("Coste incremental PAYG", "N/A", "NO JSON", False),
+            ("ACUs por mes", acus_por_mes, "Dato a transformar", True),
+            ("ACUs por release", "N/A", "NO JSON", False),
+            ("Peak ACU rate", "N/A", "NO JSON", False),
+            ("Costo por entrega (delivery)", "N/A", "NO JSON", False),
+            ("Uso presupuestario (%)", "N/A", "NO JSON", False),
+            ("Cumplimiento presupuestario", "N/A", "NO JSON", False),
+            ("% de proyectos sobre presupuesto", "N/A", "NO JSON", False),
+            ("Desviación forecast vs real", "N/A", "NO JSON", False),
+            ("Tendencia semanal de ACUs", "N/A", "NO JSON", False),
+            ("Estacionalidad de consumo", "N/A", "NO JSON", False),
+            ("Proyección de gasto mensual", "N/A", "NO JSON", False),
+            ("Elasticidad del coste", "N/A", "NO JSON", False),
+            ("Costo incremental por usuario nuevo", "N/A", "NO JSON", False),
+            ("Coste por cliente (externo)", "N/A", "NO JSON", False),
+            ("Coste recuperable", "N/A", "NO JSON", False),
+            ("Desviación Forecast vs Real", "N/A", "NO JSON", False),
+        ]
+        
+        for metric_name, value, classification, is_numeric in forecast_metrics:
+            ws[f'A{row}'] = metric_name
+            ws[f'B{row}'] = value
+            ws[f'C{row}'] = classification
+            if is_numeric and isinstance(value, (int, float)):
+                ws[f'B{row}'].number_format = '0.00'
+            row += 1
+        
         wb.save(output_filename)
         
         logger.info(f"Successfully exported summary to {output_filename}")
