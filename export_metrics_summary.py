@@ -238,6 +238,57 @@ def export_summary_to_excel(
                 ws[f'B{row}'].number_format = '0.00'
             row += 1
         
+        row += 1
+        ws[f'A{row}'] = "FINOPS ENABLEMENT"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
+        finops_enablement_metrics = [
+            ("Lead time con Devin vs humano", "N/A", "NO JSON", False),
+            ("Prompts ineficientes (alto ACU / bajo output)", "N/A", "NO JSON", False),
+            ("Prompts eficientes (%)", "N/A", "NO JSON", False),
+            ("Prompt Efficiency Index (PEI)", "N/A", "NO JSON", False),
+            ("Team Efficiency Spread", "N/A", "NO JSON", False),
+            ("% de usuarios formados en eficiencia de prompts", "N/A", "NO JSON", False),
+        ]
+        
+        for metric_name, value, classification, is_numeric in finops_enablement_metrics:
+            ws[f'A{row}'] = metric_name
+            ws[f'B{row}'] = value
+            ws[f'C{row}'] = classification
+            if is_numeric and isinstance(value, (int, float)):
+                ws[f'B{row}'].number_format = '0.00'
+            row += 1
+        
+        row += 1
+        ws[f'A{row}'] = "CLOUD GOVERNANCE"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
+        cloud_governance_metrics = [
+            ("ACUs por tipo de usuario", "N/A", "NO JSON", False),
+            ("Días restantes hasta presupuesto agotado", "N/A", "NO JSON", False),
+            ("Over-scope sessions (>N ACUs)", "N/A", "NO JSON", False),
+            ("% ACUs usados fuera de horario laboral", "N/A", "NO JSON", False),
+            ("Coste por entorno (Dev/Test/Prod)", "N/A", "NO JSON", False),
+            ("% proyectos con límites activos", "N/A", "NO JSON", False),
+            ("% de proyectos con presupuesto definido", "N/A", "NO JSON", False),
+            ("% de proyectos con alertas activas", "N/A", "NO JSON", False),
+            ("Tiempo medio de reacción a alerta 90%", "N/A", "NO JSON", False),
+        ]
+        
+        for metric_name, value, classification, is_numeric in cloud_governance_metrics:
+            ws[f'A{row}'] = metric_name
+            ws[f'B{row}'] = value
+            ws[f'C{row}'] = classification
+            if is_numeric and isinstance(value, (int, float)):
+                ws[f'B{row}'].number_format = '0.00'
+            row += 1
+        
         wb.save(output_filename)
         
         logger.info(f"Successfully exported summary to {output_filename}")
