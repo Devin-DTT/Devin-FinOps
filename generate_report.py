@@ -228,6 +228,28 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     acus_per_session = total_acus / total_sessions_count if total_sessions_count > 0 else 0
     acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
     
+    acus_per_pr_merged = total_acus / total_prs_merged if total_prs_merged > 0 else 0
+    prs_per_acu = 1 / acus_per_pr_merged if acus_per_pr_merged > 0 else 0
+    
+    total_acus_previous_month = 0
+    acu_metrics_by_plan = "N/A"
+    acus_per_line_of_code = "N/A"
+    acus_per_outcome = "N/A"
+    roi_per_session = "N/A"
+    percent_sessions_with_outcome = "N/A"
+    acus_per_productive_hour = "N/A"
+    percent_retried_sessions = "N/A"
+    pr_success_rate = "N/A"
+    percent_sessions_without_outcome = "N/A"
+    wasted_acus = "N/A"
+    idle_sessions = "N/A"
+    percent_redundant_tasks = "N/A"
+    finops_savings_percent = "N/A"
+    acu_efficiency_index = "N/A"
+    cost_velocity_ratio = "N/A"
+    waste_to_outcome_ratio = "N/A"
+    accumulated_finops_savings = "N/A"
+    
     print("\n")
     print("=" * 70)
     print("*" * 70)
@@ -276,7 +298,27 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
         'average_acus_per_day': average_acus_per_day,
         'acus_per_session': acus_per_session,
         'acus_per_developer': acus_per_developer,
-        'currency': config.currency
+        'currency': config.currency,
+        'acus_per_pr_merged': acus_per_pr_merged,
+        'prs_per_acu': prs_per_acu,
+        'total_acus_previous_month': total_acus_previous_month,
+        'acu_metrics_by_plan': acu_metrics_by_plan,
+        'acus_per_line_of_code': acus_per_line_of_code,
+        'acus_per_outcome': acus_per_outcome,
+        'roi_per_session': roi_per_session,
+        'percent_sessions_with_outcome': percent_sessions_with_outcome,
+        'acus_per_productive_hour': acus_per_productive_hour,
+        'percent_retried_sessions': percent_retried_sessions,
+        'pr_success_rate': pr_success_rate,
+        'percent_sessions_without_outcome': percent_sessions_without_outcome,
+        'wasted_acus': wasted_acus,
+        'idle_sessions': idle_sessions,
+        'percent_redundant_tasks': percent_redundant_tasks,
+        'finops_savings_percent': finops_savings_percent,
+        'acu_efficiency_index': acu_efficiency_index,
+        'cost_velocity_ratio': cost_velocity_ratio,
+        'waste_to_outcome_ratio': waste_to_outcome_ratio,
+        'accumulated_finops_savings': accumulated_finops_savings
     }
 
 
@@ -451,7 +493,7 @@ def main():
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config, all_api_data)
+    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data)
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
