@@ -156,31 +156,32 @@ def export_summary_to_excel(
         
         total_cost_previous_month = 0
         acus_per_session = total_acus / total_sessions if total_sessions > 0 else 0
-        acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
         
         cost_visibility_metrics = [
-            ("Total Monthly Cost", round(total_cost, 2), "Dato a transformar"),
-            ("Total Previous Month Cost", total_cost_previous_month, "Dato a transformar"),
-            ("Cost by User", "See detailed breakdown sheet", "Dato a transformar"),
-            ("Cost by Repository/PR", "See detailed breakdown sheet", "Dato a transformar"),
-            ("Cost by Task Type", "See detailed breakdown sheet", "Dato a transformar"),
-            ("Cost by Organization", "N/A - Data not available", "NO JSON"),
-            ("Cost per Group (IdP)", "N/A - Data not available", "NO JSON"),
-            ("ACUs Consumidos Totales", round(total_acus, 2), "Dato a transformar"),
-            ("ACUs por Usuario", "See 'Cost by User' Sheet", "Dato a transformar"),
-            ("ACUs por Sesión", round(acus_per_session, 2), "Dato a transformar"),
-            ("Coste por unidad de negocio / tribu / área", "N/A", "NO JSON"),
-            ("Coste por proyecto / producto", "N/A", "NO JSON"),
-            ("% coste compartido (shared)", "N/A", "NO JSON"),
-            ("Costo total Devin", round(total_cost, 2), "Dato a transformar"),
-            ("ACUs por desarrollador", round(acus_per_developer, 2), "Dato a transformar"),
-            ("% de consumo trazable (cost allocation)", "N/A", "NO JSON"),
+            ("Total Monthly Cost", round(total_cost, 2), "Dato a transformar", True),
+            ("Total Previous Month Cost", total_cost_previous_month, "Dato a transformar", True),
+            ("Cost by User", "See detailed breakdown sheet", "Dato a transformar", False),
+            ("Cost by Repository/PR", "See detailed breakdown sheet", "Dato a transformar", False),
+            ("Cost by Task Type", "See detailed breakdown sheet", "Dato a transformar", False),
+            ("Cost by Organization", "N/A - Data not available", "NO JSON", False),
+            ("Cost per Group (IdP)", "N/A - Data not available", "NO JSON", False),
+            ("ACUs Consumidos Totales", round(total_acus, 2), "Dato a transformar", True),
+            ("ACUs por Usuario", "See 'Cost by User' Sheet", "Dato a transformar", False),
+            ("ACUs por Sesión", round(acus_per_session, 2), "Dato a transformar", True),
+            ("Coste por unidad de negocio / tribu / área", "N/A", "NO JSON", False),
+            ("Coste por proyecto / producto", "N/A", "NO JSON", False),
+            ("% coste compartido (shared)", "N/A", "NO JSON", False),
+            ("Costo total Devin", round(total_cost, 2), "Dato a transformar", True),
+            ("ACUs por desarrollador", "See 'Cost by User' Sheet", "Dato a transformar", False),
+            ("% de consumo trazable (cost allocation)", "N/A", "NO JSON", False),
         ]
         
-        for metric_name, value, classification in cost_visibility_metrics:
+        for metric_name, value, classification, is_numeric in cost_visibility_metrics:
             ws[f'A{row}'] = metric_name
             ws[f'B{row}'] = value
             ws[f'C{row}'] = classification
+            if is_numeric and isinstance(value, (int, float)):
+                ws[f'B{row}'].number_format = '0.00'
             row += 1
         
         wb.save(output_filename)
