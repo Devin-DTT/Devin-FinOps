@@ -104,7 +104,7 @@ def export_summary_to_excel(
         
         ws['A3'] = "Metric Name"
         ws['B3'] = "Value"
-        ws['C3'] = "Unit"
+        ws['C3'] = "Source Classification"
         for col in ['A3', 'B3', 'C3']:
             ws[col].font = header_font
             ws[col].fill = header_fill
@@ -155,21 +155,32 @@ def export_summary_to_excel(
         row += 1
         
         total_cost_previous_month = 0
+        acus_per_session = total_acus / total_sessions if total_sessions > 0 else 0
+        acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
         
         cost_visibility_metrics = [
-            ("Total Monthly Cost", round(total_cost, 2), config.currency),
-            ("Total Previous Month Cost", total_cost_previous_month, config.currency),
-            ("Cost by User", "See detailed breakdown sheet", "Reference"),
-            ("Cost by Repository/PR", "See detailed breakdown sheet", "Reference"),
-            ("Cost by Task Type", "See detailed breakdown sheet", "Reference"),
-            ("Cost by Organization", "N/A - Data not available", "N/A"),
-            ("Cost per Group (IdP)", "N/A - Data not available", "N/A"),
+            ("Total Monthly Cost", round(total_cost, 2), "Dato a transformar"),
+            ("Total Previous Month Cost", total_cost_previous_month, "Dato a transformar"),
+            ("Cost by User", "See detailed breakdown sheet", "Dato a transformar"),
+            ("Cost by Repository/PR", "See detailed breakdown sheet", "Dato a transformar"),
+            ("Cost by Task Type", "See detailed breakdown sheet", "Dato a transformar"),
+            ("Cost by Organization", "N/A - Data not available", "NO JSON"),
+            ("Cost per Group (IdP)", "N/A - Data not available", "NO JSON"),
+            ("ACUs Consumidos Totales", round(total_acus, 2), "Dato a transformar"),
+            ("ACUs por Usuario", "See 'Cost by User' Sheet", "Dato a transformar"),
+            ("ACUs por Sesión", round(acus_per_session, 2), "Dato a transformar"),
+            ("Coste por unidad de negocio / tribu / área", "N/A", "NO JSON"),
+            ("Coste por proyecto / producto", "N/A", "NO JSON"),
+            ("% coste compartido (shared)", "N/A", "NO JSON"),
+            ("Costo total Devin", round(total_cost, 2), "Dato a transformar"),
+            ("ACUs por desarrollador", round(acus_per_developer, 2), "Dato a transformar"),
+            ("% de consumo trazable (cost allocation)", "N/A", "NO JSON"),
         ]
         
-        for metric_name, value, unit in cost_visibility_metrics:
+        for metric_name, value, classification in cost_visibility_metrics:
             ws[f'A{row}'] = metric_name
             ws[f'B{row}'] = value
-            ws[f'C{row}'] = unit
+            ws[f'C{row}'] = classification
             row += 1
         
         wb.save(output_filename)
