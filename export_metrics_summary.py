@@ -17,7 +17,8 @@ def export_summary_to_excel(
     consumption_data: Dict[str, Any],
     config: Any,
     all_api_data: Dict[str, Dict[str, Any]] = None,
-    output_filename: str = 'finops_summary_report.xlsx'
+    output_filename: str = 'finops_summary_report.xlsx',
+    summary_data: Dict[str, Any] = None
 ) -> None:
     """
     Export FinOps business summary data to Excel format with professional formatting.
@@ -157,6 +158,10 @@ def export_summary_to_excel(
         total_cost_previous_month = 0
         acus_per_session = total_acus / total_sessions if total_sessions > 0 else 0
         
+        total_acus_previous_month = 0
+        if summary_data:
+            total_acus_previous_month = summary_data.get('total_acus_previous_month', 0)
+        
         cost_visibility_metrics = [
             ("Total Monthly Cost", round(total_cost, 2), "Dato a transformar", True),
             ("Total Previous Month Cost", total_cost_previous_month, "Dato a transformar", True),
@@ -166,6 +171,8 @@ def export_summary_to_excel(
             ("Cost by Organization", "N/A - Data not available", "NO JSON", False),
             ("Cost per Group (IdP)", "N/A - Data not available", "NO JSON", False),
             ("ACUs Consumidos Totales", round(total_acus, 2), "Dato a transformar", True),
+            ("ACUs total mes", round(total_acus, 2), "Dato a transformar", True),
+            ("ACUs total mes anterior", total_acus_previous_month, "NO JSON", False),
             ("ACUs por Usuario", "See 'Cost by User' Sheet", "Dato a transformar", False),
             ("ACUs por Sesión", round(acus_per_session, 2), "Dato a transformar", True),
             ("Coste por unidad de negocio / tribu / área", "N/A", "NO JSON", False),
@@ -177,6 +184,53 @@ def export_summary_to_excel(
         ]
         
         for metric_name, value, classification, is_numeric in cost_visibility_metrics:
+            ws[f'A{row}'] = metric_name
+            ws[f'B{row}'] = value
+            ws[f'C{row}'] = classification
+            if is_numeric and isinstance(value, (int, float)):
+                ws[f'B{row}'].number_format = '0.00'
+            row += 1
+        
+        row += 1
+        ws[f'A{row}'] = "COST OPTIMIZATION"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
+        acus_per_pr_merged = 0
+        prs_per_acu = 0
+        cost_per_pr_merged = 0
+        
+        if summary_data:
+            acus_per_pr_merged = summary_data.get('acus_per_pr_merged', 0)
+            prs_per_acu = summary_data.get('prs_per_acu', 0)
+            cost_per_pr_merged = summary_data.get('cost_per_pr', 0)
+        
+        cost_optimization_metrics = [
+            ("Coste por plan (Core/Teams)", "N/A", "NO JSON", False),
+            ("ACUs promedio por PR mergeado", round(acus_per_pr_merged, 2), "Dato a transformar", True),
+            ("ACUs por línea de código", "N/A", "NO JSON", False),
+            ("ACUs por outcome (tarea completada)", "N/A", "NO JSON", False),
+            ("ROI por sesión", "N/A", "NO JSON", False),
+            ("% sesiones con outcome", "N/A", "NO JSON", False),
+            ("ACUs por hora productiva", "N/A", "NO JSON", False),
+            ("% sesiones reintentadas", "N/A", "NO JSON", False),
+            ("Promedio de PRs por ACU", round(prs_per_acu, 2), "Dato a transformar", True),
+            ("Tasa de éxito de PR", "N/A", "NO JSON", False),
+            ("% sesiones sin outcome", "N/A", "NO JSON", False),
+            ("ACUs desperdiciados (sin ROI)", "N/A", "NO JSON", False),
+            ("Sesiones idle (>X min)", "N/A", "NO JSON", False),
+            ("% tareas redundantes / duplicadas", "N/A", "NO JSON", False),
+            ("Costo por PR mergeado", round(cost_per_pr_merged, 2), "Dato a transformar", True),
+            ("Ahorro FinOps (%)", "N/A", "NO JSON", False),
+            ("ACU Efficiency Index (AEI)", "N/A", "NO JSON", False),
+            ("Cost Velocity Ratio (CVR)", "N/A", "NO JSON", False),
+            ("Waste-to-Outcome Ratio (WOR)", "N/A", "NO JSON", False),
+            ("Ahorro FinOps acumulado", "N/A", "NO JSON", False),
+        ]
+        
+        for metric_name, value, classification, is_numeric in cost_optimization_metrics:
             ws[f'A{row}'] = metric_name
             ws[f'B{row}'] = value
             ws[f'C{row}'] = classification
