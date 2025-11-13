@@ -488,6 +488,8 @@ def main():
     logger.info("Calculating all 20 metrics...")
     all_metrics = calculator.calculate_all_metrics()
     
+    user_org_mappings = {}
+    
     if all_api_data:
         consumption_endpoint = all_api_data.get('consumption_daily', {})
         if consumption_endpoint.get('status_code') == 200:
@@ -498,12 +500,28 @@ def main():
                 
                 if isinstance(response_data, dict):
                     consumption_by_user = response_data.get('consumption_by_user', {})
+                    
+                    unique_user_ids = list(consumption_by_user.keys())
+                    logger.info(f"Extracted {len(unique_user_ids)} unique user IDs from consumption data")
+                    
+                    if unique_user_ids:
+                        logger.info("Fetching organization mappings for all users...")
+                        user_org_mappings = data_adapter.fetch_user_organization_mappings(unique_user_ids)
+                        logger.info(f"Organization mappings fetched for {len(user_org_mappings)} users")
+                    
                     for user_id, acus in consumption_by_user.items():
                         cost_usd = round(acus * config.price_per_acu, 2)
+                        
+                        org_info = user_org_mappings.get(user_id, {})
+                        org_id = org_info.get('organization_id', 'Unmapped')
+                        org_name = org_info.get('organization_name', 'Unmapped')
+                        
                         user_breakdown_list.append({
                             'User ID': user_id,
                             'ACUs Consumed': round(acus, 2),
-                            'Cost (USD)': cost_usd
+                            'Cost (USD)': cost_usd,
+                            'Organization ID': org_id,
+                            'Organization Name': org_name
                         })
                     logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from API data")
             except (json.JSONDecodeError, AttributeError, TypeError) as e:
@@ -524,9 +542,36 @@ def main():
             user_breakdown_list.append({
                 'User ID': user_email,
                 'ACUs Consumed': round(total_acus, 2),
-                'Cost (USD)': cost_usd
+                'Cost (USD)': cost_usd,
+                'Organization ID': 'Unmapped',
+                'Organization Name': 'Unmapped'
             })
         logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from transformed data")
+    
+    org_breakdown_summary = {}
+    logger.info("Aggregating data by organization...")
+    for user_data in user_breakdown_list:
+        org_id = user_data.get('Organization ID', 'Unmapped')
+        org_name = user_data.get('Organization Name', 'Unmapped')
+        acus = user_data.get('ACUs Consumed', 0)
+        cost = user_data.get('Cost (USD)', 0)
+        
+        if org_id not in org_breakdown_summary:
+            org_breakdown_summary[org_id] = {
+                'Organization ID': org_id,
+                'Organization Name': org_name,
+                'Total ACUs Consumed': 0.0,
+                'Total Cost (USD)': 0.0
+            }
+        
+        org_breakdown_summary[org_id]['Total ACUs Consumed'] += acus
+        org_breakdown_summary[org_id]['Total Cost (USD)'] += cost
+    
+    for org_id in org_breakdown_summary:
+        org_breakdown_summary[org_id]['Total ACUs Consumed'] = round(org_breakdown_summary[org_id]['Total ACUs Consumed'], 2)
+        org_breakdown_summary[org_id]['Total Cost (USD)'] = round(org_breakdown_summary[org_id]['Total Cost (USD)'], 2)
+    
+    logger.info(f"Organization aggregation complete: {len(org_breakdown_summary)} organizations")
     
     generate_consumption_summary(all_api_data, all_metrics)
     
@@ -534,7 +579,7 @@ def main():
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list)
+    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary)
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
