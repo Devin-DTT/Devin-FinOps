@@ -423,6 +423,7 @@ def main():
     all_api_data = None
     daily_chart_data = []
     user_chart_data = []
+    user_breakdown_list = []
     
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
@@ -487,13 +488,53 @@ def main():
     logger.info("Calculating all 20 metrics...")
     all_metrics = calculator.calculate_all_metrics()
     
+    if all_api_data:
+        consumption_endpoint = all_api_data.get('consumption_daily', {})
+        if consumption_endpoint.get('status_code') == 200:
+            try:
+                response_data = consumption_endpoint.get('response', {})
+                if isinstance(response_data, str):
+                    response_data = json.loads(response_data)
+                
+                if isinstance(response_data, dict):
+                    consumption_by_user = response_data.get('consumption_by_user', {})
+                    for user_id, acus in consumption_by_user.items():
+                        cost_usd = round(acus * config.price_per_acu, 2)
+                        user_breakdown_list.append({
+                            'User ID': user_id,
+                            'ACUs Consumed': round(acus, 2),
+                            'Cost (USD)': cost_usd
+                        })
+                    logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from API data")
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                logger.warning(f"Failed to prepare user breakdown list from API: {e}")
+    
+    if not user_breakdown_list:
+        logger.info("API data not available, aggregating user consumption from transformed sessions")
+        user_acus_map = {}
+        for session in transformed_data.get('sessions', []):
+            user_email = session.get('user_email', 'unknown')
+            acus = session.get('acus_consumed', 0)
+            if user_email not in user_acus_map:
+                user_acus_map[user_email] = 0
+            user_acus_map[user_email] += acus
+        
+        for user_email, total_acus in user_acus_map.items():
+            cost_usd = round(total_acus * config.price_per_acu, 2)
+            user_breakdown_list.append({
+                'User ID': user_email,
+                'ACUs Consumed': round(total_acus, 2),
+                'Cost (USD)': cost_usd
+            })
+        logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from transformed data")
+    
     generate_consumption_summary(all_api_data, all_metrics)
     
     summary_data = generate_business_summary(all_metrics, config, all_api_data)
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data)
+    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list)
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
