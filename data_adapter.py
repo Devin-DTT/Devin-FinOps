@@ -272,6 +272,149 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
     return results
 
 
+def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
+    """
+    Fetch organization mappings for multiple users iteratively.
+    
+    Args:
+        user_ids: List of user IDs to fetch organization mappings for
+    
+    Returns:
+        Dictionary mapping user_id to organization data
+        Format: {user_id: {'organization_id': str, 'organization_name': str, 'status': int}}
+    """
+    logger.info(f"Starting iterative organization mapping fetch for {len(user_ids)} users")
+    
+    api_key = os.getenv('DEVIN_ENTERPRISE_API_KEY')
+    if not api_key:
+        error_msg = "DEVIN_ENTERPRISE_API_KEY environment variable not set"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    user_org_mappings = {}
+    base_url = "https://api.devin.ai/v2/enterprise"
+    
+    for user_id in user_ids:
+        endpoint_path = f"/members/{user_id}/organizations"
+        full_url = f"{base_url}{endpoint_path}"
+        
+        logger.info(f"Fetching organization mapping for user: {user_id}")
+        
+        try:
+            response = requests.get(
+                full_url,
+                headers=headers,
+                timeout=30
+            )
+            
+            status_code = response.status_code
+            
+            if status_code == 200:
+                try:
+                    org_data = response.json()
+                    
+                    if isinstance(org_data, dict):
+                        if 'organizations' in org_data and org_data['organizations']:
+                            first_org = org_data['organizations'][0]
+                            user_org_mappings[user_id] = {
+                                'organization_id': first_org.get('id', 'Unknown'),
+                                'organization_name': first_org.get('name', 'Unknown'),
+                                'status': status_code
+                            }
+                        elif 'id' in org_data:
+                            user_org_mappings[user_id] = {
+                                'organization_id': org_data.get('id', 'Unknown'),
+                                'organization_name': org_data.get('name', 'Unknown'),
+                                'status': status_code
+                            }
+                        else:
+                            user_org_mappings[user_id] = {
+                                'organization_id': 'Unknown',
+                                'organization_name': 'Unknown',
+                                'status': status_code,
+                                'raw_response': org_data
+                            }
+                    elif isinstance(org_data, list) and org_data:
+                        first_org = org_data[0]
+                        user_org_mappings[user_id] = {
+                            'organization_id': first_org.get('id', 'Unknown'),
+                            'organization_name': first_org.get('name', 'Unknown'),
+                            'status': status_code
+                        }
+                    else:
+                        user_org_mappings[user_id] = {
+                            'organization_id': 'Unknown',
+                            'organization_name': 'Unknown',
+                            'status': status_code
+                        }
+                    
+                    logger.info(f"  ✓ User {user_id}: {user_org_mappings[user_id].get('organization_name', 'Unknown')}")
+                    
+                except json.JSONDecodeError as e:
+                    logger.warning(f"  ✗ User {user_id}: Failed to parse JSON response - {e}")
+                    user_org_mappings[user_id] = {
+                        'organization_id': 'Unmapped',
+                        'organization_name': 'Unmapped',
+                        'status': status_code,
+                        'error': 'JSON decode error'
+                    }
+            
+            elif status_code == 404:
+                logger.warning(f"  ✗ User {user_id}: Not found (404)")
+                user_org_mappings[user_id] = {
+                    'organization_id': 'Unmapped',
+                    'organization_name': 'Unmapped',
+                    'status': status_code,
+                    'error': 'User not found'
+                }
+            
+            else:
+                logger.warning(f"  ✗ User {user_id}: HTTP {status_code}")
+                user_org_mappings[user_id] = {
+                    'organization_id': 'Unmapped',
+                    'organization_name': 'Unmapped',
+                    'status': status_code,
+                    'error': f'HTTP {status_code}'
+                }
+        
+        except requests.exceptions.Timeout:
+            logger.error(f"  ✗ User {user_id}: Request timeout")
+            user_org_mappings[user_id] = {
+                'organization_id': 'Unmapped',
+                'organization_name': 'Unmapped',
+                'status': 'TIMEOUT',
+                'error': 'Request timeout'
+            }
+        
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"  ✗ User {user_id}: Connection error - {e}")
+            user_org_mappings[user_id] = {
+                'organization_id': 'Unmapped',
+                'organization_name': 'Unmapped',
+                'status': 'CONNECTION_ERROR',
+                'error': str(e)
+            }
+        
+        except Exception as e:
+            logger.error(f"  ✗ User {user_id}: Unexpected error - {e}")
+            user_org_mappings[user_id] = {
+                'organization_id': 'Unmapped',
+                'organization_name': 'Unmapped',
+                'status': 'ERROR',
+                'error': str(e)
+            }
+    
+    successful_mappings = sum(1 for m in user_org_mappings.values() if m['status'] == 200)
+    logger.info(f"Organization mapping fetch complete: {successful_mappings}/{len(user_ids)} successful")
+    
+    return user_org_mappings
+
+
 def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.json') -> None:
     """
     Save API results dictionary to JSON file.

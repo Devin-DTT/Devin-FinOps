@@ -19,7 +19,8 @@ def export_summary_to_excel(
     all_api_data: Dict[str, Dict[str, Any]] = None,
     output_filename: str = 'finops_summary_report.xlsx',
     summary_data: Dict[str, Any] = None,
-    user_breakdown_list: list = None
+    user_breakdown_list: list = None,
+    org_breakdown_summary: dict = None
 ) -> None:
     """
     Export FinOps business summary data to Excel format with professional formatting.
@@ -29,6 +30,7 @@ def export_summary_to_excel(
         config: MetricsConfig object with pricing information
         output_filename: Output Excel filename
         user_breakdown_list: List of user consumption breakdown dictionaries
+        org_breakdown_summary: Dictionary of organization aggregation data
     """
     logger.info(f"Exporting summary data to {output_filename}...")
     
@@ -360,6 +362,39 @@ def export_summary_to_excel(
             logger.info(f"'Cost by User' sheet created with {len(user_breakdown_list)} user records")
         else:
             logger.warning("No user breakdown data provided, skipping 'Cost by User' sheet creation")
+        
+        if org_breakdown_summary:
+            logger.info(f"Creating 'Cost by Organization' sheet with {len(org_breakdown_summary)} organizations...")
+            
+            ws_org = wb.create_sheet(title="Cost by Organization")
+            
+            ws_org.column_dimensions['A'].width = 30
+            ws_org.column_dimensions['B'].width = 25
+            ws_org.column_dimensions['C'].width = 20
+            
+            ws_org['A1'] = "Organization ID"
+            ws_org['B1'] = "Total ACUs Consumed"
+            ws_org['C1'] = "Total Cost (USD)"
+            
+            for col in ['A1', 'B1', 'C1']:
+                ws_org[col].font = header_font
+                ws_org[col].fill = header_fill
+                ws_org[col].alignment = header_alignment
+            
+            row = 2
+            for org_id, org_data in org_breakdown_summary.items():
+                ws_org[f'A{row}'] = org_data.get('Organization ID', org_id)
+                ws_org[f'B{row}'] = org_data.get('Total ACUs Consumed', 0)
+                ws_org[f'C{row}'] = org_data.get('Total Cost (USD)', 0)
+                
+                ws_org[f'B{row}'].number_format = '0.00'
+                ws_org[f'C{row}'].number_format = '0.00'
+                
+                row += 1
+            
+            logger.info(f"'Cost by Organization' sheet created with {len(org_breakdown_summary)} organization records")
+        else:
+            logger.warning("No organization breakdown data provided, skipping 'Cost by Organization' sheet creation")
         
         wb.save(output_filename)
         
