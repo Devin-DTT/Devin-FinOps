@@ -18,7 +18,8 @@ def export_summary_to_excel(
     config: Any,
     all_api_data: Dict[str, Dict[str, Any]] = None,
     output_filename: str = 'finops_summary_report.xlsx',
-    summary_data: Dict[str, Any] = None
+    summary_data: Dict[str, Any] = None,
+    user_breakdown_list: list = None
 ) -> None:
     """
     Export FinOps business summary data to Excel format with professional formatting.
@@ -27,6 +28,7 @@ def export_summary_to_excel(
         consumption_data: Dictionary containing metrics and reporting_period
         config: MetricsConfig object with pricing information
         output_filename: Output Excel filename
+        user_breakdown_list: List of user consumption breakdown dictionaries
     """
     logger.info(f"Exporting summary data to {output_filename}...")
     
@@ -325,6 +327,39 @@ def export_summary_to_excel(
             if is_numeric and isinstance(value, (int, float)):
                 ws[f'B{row}'].number_format = '0.00'
             row += 1
+        
+        if user_breakdown_list:
+            logger.info(f"Creating 'Cost by User' sheet with {len(user_breakdown_list)} users...")
+            
+            ws_user = wb.create_sheet(title="Cost by User")
+            
+            ws_user.column_dimensions['A'].width = 30
+            ws_user.column_dimensions['B'].width = 20
+            ws_user.column_dimensions['C'].width = 20
+            
+            ws_user['A1'] = "User ID"
+            ws_user['B1'] = "ACUs Consumed"
+            ws_user['C1'] = "Cost (USD)"
+            
+            for col in ['A1', 'B1', 'C1']:
+                ws_user[col].font = header_font
+                ws_user[col].fill = header_fill
+                ws_user[col].alignment = header_alignment
+            
+            row = 2
+            for user_data in user_breakdown_list:
+                ws_user[f'A{row}'] = user_data.get('User ID', '')
+                ws_user[f'B{row}'] = user_data.get('ACUs Consumed', 0)
+                ws_user[f'C{row}'] = user_data.get('Cost (USD)', 0)
+                
+                ws_user[f'B{row}'].number_format = '0.00'
+                ws_user[f'C{row}'].number_format = '0.00'
+                
+                row += 1
+            
+            logger.info(f"'Cost by User' sheet created with {len(user_breakdown_list)} user records")
+        else:
+            logger.warning("No user breakdown data provided, skipping 'Cost by User' sheet creation")
         
         wb.save(output_filename)
         
