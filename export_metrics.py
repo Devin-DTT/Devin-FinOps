@@ -53,11 +53,11 @@ def export_daily_acus_to_csv(
             writer.writerows(rows)
         
         logger.info(f"Successfully exported {len(rows)} records to {output_filename}")
-        print(f"\n✓ Daily consumption data exported to {output_filename} ({len(rows)} records)")
+        print(f"\n+ Daily consumption data exported to {output_filename} ({len(rows)} records)")
         
     except FileNotFoundError:
         logger.error(f"Raw data file not found: {raw_data_file}")
-        print(f"\n✗ Error: {raw_data_file} not found")
+        print(f"\n- Error: {raw_data_file} not found")
     except Exception as e:
         logger.error(f"Failed to export consumption data: {e}", exc_info=True)
-        print(f"\n✗ Error exporting consumption data: {e}")
+        print(f"\n- Error exporting consumption data: {e}")
