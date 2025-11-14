@@ -353,10 +353,10 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
                             'status': status_code
                         }
                     
-                    logger.info(f"  ✓ User {user_id}: {user_org_mappings[user_id].get('organization_name', 'Unknown')}")
+                    logger.info(f"  + User {user_id}: {user_org_mappings[user_id].get('organization_name', 'Unknown')}")
                     
                 except json.JSONDecodeError as e:
-                    logger.warning(f"  ✗ User {user_id}: Failed to parse JSON response - {e}")
+                    logger.warning(f"  - User {user_id}: Failed to parse JSON response - {e}")
                     user_org_mappings[user_id] = {
                         'organization_id': 'Unmapped',
                         'organization_name': 'Unmapped',
@@ -365,7 +365,7 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
                     }
             
             elif status_code == 404:
-                logger.warning(f"  ✗ User {user_id}: Not found (404)")
+                logger.warning(f"  - User {user_id}: Not found (404)")
                 user_org_mappings[user_id] = {
                     'organization_id': 'Unmapped',
                     'organization_name': 'Unmapped',
@@ -374,7 +374,7 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
                 }
             
             else:
-                logger.warning(f"  ✗ User {user_id}: HTTP {status_code}")
+                logger.warning(f"  - User {user_id}: HTTP {status_code}")
                 user_org_mappings[user_id] = {
                     'organization_id': 'Unmapped',
                     'organization_name': 'Unmapped',
@@ -383,7 +383,7 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
                 }
         
         except requests.exceptions.Timeout:
-            logger.error(f"  ✗ User {user_id}: Request timeout")
+            logger.error(f"  - User {user_id}: Request timeout")
             user_org_mappings[user_id] = {
                 'organization_id': 'Unmapped',
                 'organization_name': 'Unmapped',
@@ -392,7 +392,7 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
             }
         
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"  ✗ User {user_id}: Connection error - {e}")
+            logger.error(f"  - User {user_id}: Connection error - {e}")
             user_org_mappings[user_id] = {
                 'organization_id': 'Unmapped',
                 'organization_name': 'Unmapped',
@@ -401,7 +401,7 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
             }
         
         except Exception as e:
-            logger.error(f"  ✗ User {user_id}: Unexpected error - {e}")
+            logger.error(f"  - User {user_id}: Unexpected error - {e}")
             user_org_mappings[user_id] = {
                 'organization_id': 'Unmapped',
                 'organization_name': 'Unmapped',

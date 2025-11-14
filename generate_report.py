@@ -588,8 +588,8 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-        print(f"\n✓ SUCCESS: All API data saved and FinOps Summary computed.")
+        print(f"\n+ SUCCESS: All API data saved and FinOps Summary computed.")
     except Exception as e:
         logger.error(f"Error generating report: {e}", exc_info=True)
-        print(f"\n✗ FAILED: {e}")
+        print(f"\n- FAILED: {e}")
         raise
