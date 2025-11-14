@@ -255,7 +255,7 @@ def generate_html_dashboard(
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html_content)
         logger.info(f"Successfully generated {output_file}")
-        print(f"\n✓ HTML dashboard generated: {output_file}")
+        print(f"\n+ HTML dashboard generated: {output_file}")
     except Exception as e:
         logger.error(f"Failed to generate HTML dashboard: {e}", exc_info=True)
-        print(f"\n✗ Error generating HTML dashboard: {e}")
+        print(f"\n- Error generating HTML dashboard: {e}")

@@ -399,8 +399,8 @@ def export_summary_to_excel(
         wb.save(output_filename)
         
         logger.info(f"Successfully exported summary to {output_filename}")
-        print(f"\n✓ Summary data exported to {output_filename}")
+        print(f"\n+ Summary data exported to {output_filename}")
         
     except Exception as e:
         logger.error(f"Failed to export summary to Excel: {e}", exc_info=True)
-        print(f"\n✗ Error exporting summary to Excel: {e}")
+        print(f"\n- Error exporting summary to Excel: {e}")
