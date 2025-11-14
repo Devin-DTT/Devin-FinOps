@@ -26,15 +26,12 @@ logger = logging.getLogger(__name__)
 API_ENDPOINTS = {
     'consumption_cycles': '/consumption/cycles',
     'consumption_daily': '/consumption/daily',
-    'consumption_daily_user': '/consumption/daily/gtorreshuamantica',
     'metrics_prs': '/metrics/prs',
     'metrics_sessions': '/metrics/sessions',
     'metrics_searches': '/metrics/searches',
     'metrics_usage': '/metrics/usage',
     'roles': '/roles',
     'members': '/members',
-    'members_user': '/members/gtorreshuamantica',
-    'members_user_orgs': '/members/gtorreshuamantica/organizations',
     'groups': '/groups',
     'api_keys': '/api-keys',
     'playbooks': '/playbooks'
