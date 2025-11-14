@@ -23,6 +23,8 @@ from export_metrics_summary import export_summary_to_excel
 logger = logging.getLogger(__name__)
 
 
+TARGET_USER_ID = "email|68edea2414c1686557f8d5a6"
+
 API_ENDPOINTS = {
     'consumption_cycles': '/consumption/cycles',
     'consumption_daily': '/consumption/daily',
@@ -32,6 +34,8 @@ API_ENDPOINTS = {
     'metrics_usage': '/metrics/usage',
     'roles': '/roles',
     'members': '/members',
+    'members_user': f'/members/{TARGET_USER_ID}',
+    'members_user_orgs': f'/members/{TARGET_USER_ID}/organizations',
     'groups': '/groups',
     'api_keys': '/api-keys',
     'playbooks': '/playbooks'
