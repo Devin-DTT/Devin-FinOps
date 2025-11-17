@@ -20,7 +20,8 @@ def export_summary_to_excel(
     output_filename: str = 'finops_summary_report.xlsx',
     summary_data: Dict[str, Any] = None,
     user_breakdown_list: list = None,
-    org_breakdown_summary: dict = None
+    org_breakdown_summary: dict = None,
+    finops_metrics: Dict[str, Dict[str, Any]] = None
 ) -> None:
     """
     Export FinOps business summary data to Excel format with professional formatting.
@@ -31,6 +32,7 @@ def export_summary_to_excel(
         output_filename: Output Excel filename
         user_breakdown_list: List of user consumption breakdown dictionaries
         org_breakdown_summary: Dictionary of organization aggregation data
+        finops_metrics: Dictionary containing FinOps metrics with traceability information
     """
     logger.info(f"Exporting summary data to {output_filename}...")
     
@@ -97,30 +99,91 @@ def export_summary_to_excel(
         title_font = Font(bold=True, size=14)
         title_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
         
-        ws.column_dimensions['A'].width = 35
+        ws.column_dimensions['A'].width = 40
         ws.column_dimensions['B'].width = 20
-        ws.column_dimensions['C'].width = 15
+        ws.column_dimensions['C'].width = 30
+        ws.column_dimensions['D'].width = 50
+        ws.column_dimensions['E'].width = 25
+        ws.column_dimensions['F'].width = 50
         
         ws['A1'] = "FINOPS BUSINESS SUMMARY REPORT"
         ws['A1'].font = title_font
         ws['A1'].fill = title_fill
         ws['A1'].alignment = Alignment(horizontal="center")
-        ws.merge_cells('A1:C1')
+        ws.merge_cells('A1:F1')
         
-        ws['A3'] = "Metric Name"
-        ws['B3'] = "Value"
-        ws['C3'] = "Source Classification"
-        for col in ['A3', 'B3', 'C3']:
-            ws[col].font = header_font
-            ws[col].fill = header_fill
-            ws[col].alignment = header_alignment
+        row = 3
         
-        ws['A4'] = "KEY METRICS FROM REAL DATA"
-        ws['A4'].font = Font(bold=True, size=11)
-        ws['A4'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells('A4:C4')
+        if finops_metrics:
+            ws[f'A{row}'] = "KEY FINOPS METRICS WITH TRACEABILITY"
+            ws[f'A{row}'].font = Font(bold=True, size=12)
+            ws[f'A{row}'].fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            ws[f'A{row}'].alignment = Alignment(horizontal="center")
+            ws.merge_cells(f'A{row}:F{row}')
+            row += 1
+            
+            ws[f'A{row}'] = "METRICA FINOPS"
+            ws[f'B{row}'] = "RESULTADO"
+            ws[f'C{row}'] = "FORMULA / LOGICA"
+            ws[f'D{row}'] = "FUENTE JSON"
+            ws[f'E{row}'] = "DATO EXTRAIDO"
+            ws[f'F{row}'] = "DATO EXTERNO PENDIENTE"
+            
+            for col in [f'A{row}', f'B{row}', f'C{row}', f'D{row}', f'E{row}', f'F{row}']:
+                ws[col].font = header_font
+                ws[col].fill = header_fill
+                ws[col].alignment = header_alignment
+            row += 1
+            
+            for metric_name, metric_data in finops_metrics.items():
+                ws[f'A{row}'] = metric_name
+                
+                value = metric_data.get('value', 'N/A')
+                if isinstance(value, (int, float)) and value != 'N/A':
+                    ws[f'B{row}'] = round(value, 2)
+                    ws[f'B{row}'].number_format = '0.00'
+                else:
+                    ws[f'B{row}'] = str(value)
+                
+                if 'formula' in metric_data:
+                    ws[f'C{row}'] = metric_data.get('formula', '')
+                    
+                    sources_used = metric_data.get('sources_used', [])
+                    if sources_used:
+                        source_paths = []
+                        raw_values = []
+                        for source in sources_used:
+                            source_paths.append(source.get('source_path', ''))
+                            raw_values.append(str(source.get('raw_value', '')))
+                        
+                        ws[f'D{row}'] = '\n'.join(source_paths)
+                        ws[f'E{row}'] = '\n'.join(raw_values)
+                    
+                    ws[f'F{row}'] = ''
+                
+                elif 'external_data_required' in metric_data:
+                    ws[f'C{row}'] = metric_data.get('reason', '')
+                    ws[f'D{row}'] = ''
+                    ws[f'E{row}'] = ''
+                    ws[f'F{row}'] = metric_data.get('external_data_required', '')
+                
+                ws[f'A{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                ws[f'C{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                ws[f'D{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                ws[f'E{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                ws[f'F{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                
+                row += 1
+            
+            row += 1
+            logger.info(f"Added Key FinOps Metrics section with {len(finops_metrics)} metrics")
         
-        row = 5
+        ws[f'A{row}'] = "KEY METRICS FROM REAL DATA"
+        ws[f'A{row}'].font = Font(bold=True, size=11)
+        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+        ws.merge_cells(f'A{row}:C{row}')
+        row += 1
+        
         key_metrics = [
             ("Total Daily Consumption Records", total_sessions, "Records"),
             ("Average ACUs Per Day", round(average_acus_per_day, 2), "ACUs"),

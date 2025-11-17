@@ -11,9 +11,7 @@ import json
 import logging
 import pandas as pd
 import argparse
-from datetime import datetime
 from typing import Dict, Any, List
-from collections import defaultdict
 from metrics_calculator import MetricsCalculator
 from config import MetricsConfig
 import data_adapter
@@ -40,6 +38,283 @@ API_ENDPOINTS = {
     'api_keys': '/api-keys',
     'playbooks': '/playbooks'
 }
+
+
+def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: MetricsConfig) -> Dict[str, Dict[str, Any]]:
+    """
+    Calculate base metrics with full traceability to JSON source paths.
+    
+    Args:
+        all_api_data: Dictionary of API results from fetch_api_data()
+        config: MetricsConfig object with pricing information
+    
+    Returns:
+        Dictionary containing base metrics with 'value' and 'source' keys
+    """
+    base_data = {}
+    
+    consumption_endpoint = all_api_data.get('consumption_daily', {})
+    if consumption_endpoint.get('status_code') == 200:
+        try:
+            response_data = consumption_endpoint.get('response', {})
+            if isinstance(response_data, str):
+                response_data = json.loads(response_data)
+            
+            if isinstance(response_data, dict):
+                total_acus = response_data.get('total_acus', 0)
+                consumption_by_date = response_data.get('consumption_by_date', {})
+                consumption_by_user = response_data.get('consumption_by_user', {})
+                
+                base_data['total_acus'] = {
+                    'value': total_acus,
+                    'source': 'consumption_daily.response.total_acus'
+                }
+                base_data['consumption_by_date'] = {
+                    'value': consumption_by_date,
+                    'source': 'consumption_daily.response.consumption_by_date'
+                }
+                base_data['consumption_by_user'] = {
+                    'value': consumption_by_user,
+                    'source': 'consumption_daily.response.consumption_by_user'
+                }
+                base_data['unique_users'] = {
+                    'value': len(consumption_by_user),
+                    'source': 'consumption_daily.response.consumption_by_user (count)'
+                }
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            logger.warning(f"Failed to extract consumption_daily metrics: {e}")
+    
+    metrics_prs_endpoint = all_api_data.get('metrics_prs', {})
+    if metrics_prs_endpoint.get('status_code') == 200:
+        try:
+            prs_response = metrics_prs_endpoint.get('response', {})
+            if isinstance(prs_response, str):
+                prs_response = json.loads(prs_response)
+            if isinstance(prs_response, dict):
+                prs_merged = prs_response.get('prs_merged', 0)
+                base_data['prs_merged'] = {
+                    'value': prs_merged,
+                    'source': 'metrics_prs.response.prs_merged'
+                }
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            logger.warning(f"Failed to extract metrics_prs data: {e}")
+    
+    metrics_sessions_endpoint = all_api_data.get('metrics_sessions', {})
+    if metrics_sessions_endpoint.get('status_code') == 200:
+        try:
+            sessions_response = metrics_sessions_endpoint.get('response', {})
+            if isinstance(sessions_response, str):
+                sessions_response = json.loads(sessions_response)
+            if isinstance(sessions_response, dict):
+                sessions_count = sessions_response.get('sessions_count', 0)
+                base_data['sessions_count'] = {
+                    'value': sessions_count,
+                    'source': 'metrics_sessions.response.sessions_count'
+                }
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            logger.warning(f"Failed to extract metrics_sessions data: {e}")
+    
+    base_data['price_per_acu'] = {
+        'value': config.price_per_acu,
+        'source': 'config.price_per_acu'
+    }
+    
+    return base_data
+
+
+def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """
+    Calculate FinOps metrics with full traceability for viable metrics and documentation for inviable metrics.
+    
+    Args:
+        base_data: Dictionary containing base metrics with 'value' and 'source' keys
+    
+    Returns:
+        Dictionary containing all metrics (viable and inviable) with traceability information
+    """
+    all_metrics = {}
+    
+    def get_value(key, default=0):
+        return base_data.get(key, {}).get('value', default)
+    
+    def get_source(key):
+        return base_data.get(key, {}).get('source', 'N/A')
+    
+    total_acus = get_value('total_acus', 0)
+    price_per_acu = get_value('price_per_acu', 0)
+    total_cost = total_acus * price_per_acu
+    
+    all_metrics['Costo Total Mensual'] = {
+        'value': total_cost,
+        'formula': 'Total ACUs * Price per ACU',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
+            {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+        ]
+    }
+    
+    all_metrics['ACUs Totales Consumidos'] = {
+        'value': total_acus,
+        'formula': 'Direct value from API',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus}
+        ]
+    }
+    
+    prs_merged = get_value('prs_merged', 0)
+    cost_per_pr = total_cost / prs_merged if prs_merged > 0 else 0
+    
+    all_metrics['Relación coste–velocidad (Costo/PR Mergeado)'] = {
+        'value': cost_per_pr,
+        'formula': 'Total Cost / Total Merged PRs',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
+            {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+            {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+        ]
+    }
+    
+    acus_per_pr = total_acus / prs_merged if prs_merged > 0 else 0
+    
+    all_metrics['ACUs por PR Mergeado'] = {
+        'value': acus_per_pr,
+        'formula': 'Total ACUs / Total Merged PRs',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
+            {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+        ]
+    }
+    
+    sessions_count = get_value('sessions_count', 0)
+    acus_per_session = total_acus / sessions_count if sessions_count > 0 else 0
+    
+    all_metrics['ACUs por Sesión'] = {
+        'value': acus_per_session,
+        'formula': 'Total ACUs / Total Sessions',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
+            {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
+        ]
+    }
+    
+    unique_users = get_value('unique_users', 0)
+    acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
+    
+    all_metrics['ACUs por Desarrollador'] = {
+        'value': acus_per_developer,
+        'formula': 'Total ACUs / Unique Users',
+        'sources_used': [
+            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
+            {'source_path': get_source('unique_users'), 'raw_value': unique_users}
+        ]
+    }
+    
+    consumption_by_user = get_value('consumption_by_user', {})
+    
+    all_metrics['Costo por Usuario'] = {
+        'value': 'See detailed breakdown',
+        'formula': 'ACUs per User * Price per ACU',
+        'sources_used': [
+            {'source_path': get_source('consumption_by_user'), 'raw_value': f'{len(consumption_by_user)} users'},
+            {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+        ]
+    }
+    
+    all_metrics['Total de Sesiones'] = {
+        'value': sessions_count,
+        'formula': 'Direct value from API',
+        'sources_used': [
+            {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
+        ]
+    }
+    
+    all_metrics['Usuarios Únicos'] = {
+        'value': unique_users,
+        'formula': 'Count of unique users from consumption data',
+        'sources_used': [
+            {'source_path': get_source('unique_users'), 'raw_value': unique_users}
+        ]
+    }
+
+    all_metrics['Evaluar eficiencia de tareas'] = {
+        'value': 'N/A',
+        'reason': 'Requires session type classification not available in current API.',
+        'external_data_required': 'Session type classification (e.g., QA, Data, Code).'
+    }
+    
+    all_metrics['Modelos de reparto mixto'] = {
+        'value': 'N/A',
+        'reason': 'Requires shared resource allocation data not available in current API.',
+        'external_data_required': 'Shared ACUs or consumption pooling indicators.'
+    }
+    
+    all_metrics['Right-sizing de plan'] = {
+        'value': 'N/A',
+        'reason': 'Requires external financial and subscription data.',
+        'external_data_required': 'Monthly plan cost and allocated ACU quota.'
+    }
+    
+    all_metrics['Análisis avanzado de eficiencia'] = {
+        'value': 'N/A',
+        'reason': 'Requires code change metrics not available in current API.',
+        'external_data_required': 'Lines of Code (LOC) modified.'
+    }
+    
+    all_metrics['Evaluar valor generado'] = {
+        'value': 'N/A',
+        'reason': 'Requires business outcome tracking not available in current API.',
+        'external_data_required': 'Completed deliverables or business outcomes.'
+    }
+    
+    all_metrics['Evaluar eficiencia por sesión'] = {
+        'value': 'N/A',
+        'reason': 'Requires session value estimation and duration tracking.',
+        'external_data_required': 'PR estimated value and session effective duration.'
+    }
+    
+    all_metrics['KPI de efectividad'] = {
+        'value': 'N/A',
+        'reason': 'Requires session outcome tracking not available in current API.',
+        'external_data_required': 'Count of sessions leading to a merged PR or closed issue.'
+    }
+    
+    all_metrics['Detectar sesiones lentas o ineficientes'] = {
+        'value': 'N/A',
+        'reason': 'Requires session duration and efficiency benchmarks.',
+        'external_data_required': 'ACU consumption vs. session effective duration.'
+    }
+    
+    all_metrics['Calidad del output'] = {
+        'value': 'N/A',
+        'reason': 'Requires PR initiation tracking not available in current API.',
+        'external_data_required': 'Total number of PRs initiated by Devin.'
+    }
+    
+    all_metrics['Detección de waste directo'] = {
+        'value': 'N/A',
+        'reason': 'Requires session outcome classification not available in current API.',
+        'external_data_required': 'ACUs associated with sessions with no useful outcome.'
+    }
+    
+    all_metrics['Prevención de cortes o bloqueos'] = {
+        'value': 'N/A',
+        'reason': 'Requires budget and spending limit data not available in current API.',
+        'external_data_required': 'Remaining budget or spending limit.'
+    }
+    
+    all_metrics['Alertas 75/90/100%'] = {
+        'value': 'N/A',
+        'reason': 'Requires budget threshold configuration not available in current API.',
+        'external_data_required': 'Budgeted ACU volume or financial thresholds.'
+    }
+    
+    all_metrics['Medir mejora de productividad'] = {
+        'value': 'N/A',
+        'reason': 'Requires human baseline comparison data not available in current API.',
+        'external_data_required': 'Session duration and human baseline (manual time).'
+    }
+    
+    return all_metrics
 
 
 def transform_raw_data(raw_sessions: List[Dict], start_date: str = '2025-01-01', end_date: str = '2025-01-31') -> Dict[str, Any]:
@@ -418,7 +693,7 @@ def main():
     logger.info("=" * 60)
     logger.info("FinOps Metrics Report Generator - Phase 3")
     logger.info("=" * 60)
-    logger.info(f"Date range: {args.start} to {args.end}")
+    logger.info("Date range: %s to %s", args.start, args.end)
     
     logger.info("Fetching data from all Enterprise API endpoints...")
     all_api_data = None
@@ -574,13 +849,21 @@ def main():
     
     logger.info(f"Organization aggregation complete: {len(org_breakdown_summary)} organizations")
     
+    logger.info("Calculating base metrics with traceability...")
+    base_data = calculate_base_metrics(all_api_data, config)
+    logger.info(f"Base metrics calculated: {len(base_data)} metrics")
+    
+    logger.info("Calculating FinOps metrics with traceability...")
+    finops_metrics = calculate_finops_metrics(base_data)
+    logger.info(f"FinOps metrics calculated: {len(finops_metrics)} metrics")
+    
     generate_consumption_summary(all_api_data, all_metrics)
     
     summary_data = generate_business_summary(all_metrics, config, all_api_data)
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary)
+    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary, finops_metrics=finops_metrics)
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
@@ -589,7 +872,7 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-        print(f"\n+ SUCCESS: All API data saved and FinOps Summary computed.")
+        print("\n+ SUCCESS: All API data saved and FinOps Summary computed.")
     except Exception as e:
         logger.error(f"Error generating report: {e}", exc_info=True)
         print(f"\n- FAILED: {e}")
