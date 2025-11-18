@@ -135,65 +135,66 @@ def export_summary_to_excel(
                 ws[col].alignment = header_alignment
             row += 1
             
-            for metric_name, metric_data in finops_metrics.items():
-                ws[f'A{row}'] = metric_name
+            categories = [
+                'COST VISIBILITY AND TRANSPARENCY',
+                'COST OPTIMIZATION',
+                'FINOPS ENABLEMENT',
+                'CLOUD GOVERNANCE',
+                'FORECAST'
+            ]
+            
+            for category in categories:
+                ws[f'A{row}'] = category
+                ws[f'A{row}'].font = Font(bold=True, size=11)
+                ws[f'A{row}'].fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+                ws.merge_cells(f'A{row}:F{row}')
+                row += 1
                 
-                value = metric_data.get('value', 'N/A')
-                if isinstance(value, (int, float)) and value != 'N/A':
-                    ws[f'B{row}'] = round(value, 2)
-                    ws[f'B{row}'].number_format = '0.00'
-                else:
-                    ws[f'B{row}'] = str(value)
+                category_metrics = {k: v for k, v in finops_metrics.items() if v.get('category') == category}
                 
-                if 'formula' in metric_data:
-                    ws[f'C{row}'] = metric_data.get('formula', '')
+                for metric_name, metric_data in category_metrics.items():
+                    ws[f'A{row}'] = metric_name
                     
-                    sources_used = metric_data.get('sources_used', [])
-                    if sources_used:
-                        source_paths = []
-                        raw_values = []
-                        for source in sources_used:
-                            source_paths.append(source.get('source_path', ''))
-                            raw_values.append(str(source.get('raw_value', '')))
+                    value = metric_data.get('value', 'N/A')
+                    if isinstance(value, (int, float)) and value != 'N/A':
+                        ws[f'B{row}'] = round(value, 2)
+                        ws[f'B{row}'].number_format = '0.00'
+                    else:
+                        ws[f'B{row}'] = str(value)
+                    
+                    if 'formula' in metric_data:
+                        ws[f'C{row}'] = metric_data.get('formula', '')
                         
-                        ws[f'D{row}'] = '\n'.join(source_paths)
-                        ws[f'E{row}'] = '\n'.join(raw_values)
+                        sources_used = metric_data.get('sources_used', [])
+                        if sources_used:
+                            source_paths = []
+                            raw_values = []
+                            for source in sources_used:
+                                source_paths.append(source.get('source_path', ''))
+                                raw_values.append(str(source.get('raw_value', '')))
+                            
+                            ws[f'D{row}'] = '\n'.join(source_paths)
+                            ws[f'E{row}'] = '\n'.join(raw_values)
+                        
+                        ws[f'F{row}'] = ''
                     
-                    ws[f'F{row}'] = ''
-                
-                elif 'external_data_required' in metric_data:
-                    ws[f'C{row}'] = metric_data.get('reason', '')
-                    ws[f'D{row}'] = ''
-                    ws[f'E{row}'] = ''
-                    ws[f'F{row}'] = metric_data.get('external_data_required', '')
-                
-                ws[f'A{row}'].alignment = Alignment(wrap_text=True, vertical="top")
-                ws[f'C{row}'].alignment = Alignment(wrap_text=True, vertical="top")
-                ws[f'D{row}'].alignment = Alignment(wrap_text=True, vertical="top")
-                ws[f'E{row}'].alignment = Alignment(wrap_text=True, vertical="top")
-                ws[f'F{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    elif 'external_data_required' in metric_data:
+                        ws[f'C{row}'] = metric_data.get('reason', '')
+                        ws[f'D{row}'] = ''
+                        ws[f'E{row}'] = ''
+                        ws[f'F{row}'] = metric_data.get('external_data_required', '')
+                    
+                    ws[f'A{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    ws[f'C{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    ws[f'D{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    ws[f'E{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    ws[f'F{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                    
+                    row += 1
                 
                 row += 1
             
-            row += 1
-            logger.info(f"Added Key FinOps Metrics section with {len(finops_metrics)} metrics")
-        
-        ws[f'A{row}'] = "KEY METRICS FROM REAL DATA"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        key_metrics = [
-            ("Total Daily Consumption Records", total_sessions, "Records"),
-            ("Average ACUs Per Day", round(average_acus_per_day, 2), "ACUs"),
-        ]
-        
-        for metric_name, value, unit in key_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = unit
-            row += 1
+            logger.info(f"Added Key FinOps Metrics section with {len(finops_metrics)} metrics organized by category")
         
         row += 1
         ws[f'A{row}'] = "ADDITIONAL STATISTICS"
@@ -203,6 +204,8 @@ def export_summary_to_excel(
         row += 1
         
         additional_stats = [
+            ("Total Daily Consumption Records", total_sessions, "Records"),
+            ("Average ACUs Per Day", round(average_acus_per_day, 2), "ACUs"),
             ("Unique Users", unique_users, "Users"),
             ("Reporting Period Start", start_date, "Date"),
             ("Reporting Period End", end_date, "Date"),
@@ -213,184 +216,6 @@ def export_summary_to_excel(
             ws[f'A{row}'] = metric_name
             ws[f'B{row}'] = value
             ws[f'C{row}'] = unit
-            row += 1
-        
-        row += 1
-        ws[f'A{row}'] = "COST VISIBILITY AND TRANSPARENCY"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        total_cost_previous_month = 0
-        acus_per_session = total_acus / total_sessions if total_sessions > 0 else 0
-        
-        total_acus_previous_month = 0
-        if summary_data:
-            total_acus_previous_month = summary_data.get('total_acus_previous_month', 0)
-        
-        cost_visibility_metrics = [
-            ("Total Monthly Cost", round(total_cost, 2), "Dato a transformar", True),
-            ("Total Previous Month Cost", total_cost_previous_month, "Dato a transformar", True),
-            ("Cost by User", "See detailed breakdown sheet", "Dato a transformar", False),
-            ("Cost by Repository/PR", "See detailed breakdown sheet", "Dato a transformar", False),
-            ("Cost by Task Type", "See detailed breakdown sheet", "Dato a transformar", False),
-            ("Cost by Organization", "N/A - Data not available", "NO JSON", False),
-            ("Cost per Group (IdP)", "N/A - Data not available", "NO JSON", False),
-            ("ACUs Consumidos Totales", round(total_acus, 2), "Dato a transformar", True),
-            ("ACUs total mes", round(total_acus, 2), "Dato a transformar", True),
-            ("ACUs total mes anterior", total_acus_previous_month, "NO JSON", False),
-            ("ACUs por Usuario", "See 'Cost by User' Sheet", "Dato a transformar", False),
-            ("ACUs por Sesión", round(acus_per_session, 2), "Dato a transformar", True),
-            ("Coste por unidad de negocio / tribu / área", "N/A", "NO JSON", False),
-            ("Coste por proyecto / producto", "N/A", "NO JSON", False),
-            ("% coste compartido (shared)", "N/A", "NO JSON", False),
-            ("Costo total Devin", round(total_cost, 2), "Dato a transformar", True),
-            ("ACUs por desarrollador", "See 'Cost by User' Sheet", "Dato a transformar", False),
-            ("% de consumo trazable (cost allocation)", "N/A", "NO JSON", False),
-        ]
-        
-        for metric_name, value, classification, is_numeric in cost_visibility_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = classification
-            if is_numeric and isinstance(value, (int, float)):
-                ws[f'B{row}'].number_format = '0.00'
-            row += 1
-        
-        row += 1
-        ws[f'A{row}'] = "COST OPTIMIZATION"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        acus_per_pr_merged = 0
-        prs_per_acu = 0
-        cost_per_pr_merged = 0
-        
-        if summary_data:
-            acus_per_pr_merged = summary_data.get('acus_per_pr_merged', 0)
-            prs_per_acu = summary_data.get('prs_per_acu', 0)
-            cost_per_pr_merged = summary_data.get('cost_per_pr', 0)
-        
-        cost_optimization_metrics = [
-            ("Coste por plan (Core/Teams)", "N/A", "NO JSON", False),
-            ("ACUs promedio por PR mergeado", round(acus_per_pr_merged, 2), "Dato a transformar", True),
-            ("ACUs por línea de código", "N/A", "NO JSON", False),
-            ("ACUs por outcome (tarea completada)", "N/A", "NO JSON", False),
-            ("ROI por sesión", "N/A", "NO JSON", False),
-            ("% sesiones con outcome", "N/A", "NO JSON", False),
-            ("ACUs por hora productiva", "N/A", "NO JSON", False),
-            ("% sesiones reintentadas", "N/A", "NO JSON", False),
-            ("Promedio de PRs por ACU", round(prs_per_acu, 2), "Dato a transformar", True),
-            ("Tasa de éxito de PR", "N/A", "NO JSON", False),
-            ("% sesiones sin outcome", "N/A", "NO JSON", False),
-            ("ACUs desperdiciados (sin ROI)", "N/A", "NO JSON", False),
-            ("Sesiones idle (>X min)", "N/A", "NO JSON", False),
-            ("% tareas redundantes / duplicadas", "N/A", "NO JSON", False),
-            ("Costo por PR mergeado", round(cost_per_pr_merged, 2), "Dato a transformar", True),
-            ("Ahorro FinOps (%)", "N/A", "NO JSON", False),
-            ("ACU Efficiency Index (AEI)", "N/A", "NO JSON", False),
-            ("Cost Velocity Ratio (CVR)", "N/A", "NO JSON", False),
-            ("Waste-to-Outcome Ratio (WOR)", "N/A", "NO JSON", False),
-            ("Ahorro FinOps acumulado", "N/A", "NO JSON", False),
-        ]
-        
-        for metric_name, value, classification, is_numeric in cost_optimization_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = classification
-            if is_numeric and isinstance(value, (int, float)):
-                ws[f'B{row}'].number_format = '0.00'
-            row += 1
-        
-        row += 1
-        ws[f'A{row}'] = "FINOPS ENABLEMENT"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        finops_enablement_metrics = [
-            ("Lead time con Devin vs humano", "N/A", "NO JSON", False),
-            ("Prompts ineficientes (alto ACU / bajo output)", "N/A", "NO JSON", False),
-            ("Prompts eficientes (%)", "N/A", "NO JSON", False),
-            ("Prompt Efficiency Index (PEI)", "N/A", "NO JSON", False),
-            ("Team Efficiency Spread", "N/A", "NO JSON", False),
-            ("% de usuarios formados en eficiencia de prompts", "N/A", "NO JSON", False),
-        ]
-        
-        for metric_name, value, classification, is_numeric in finops_enablement_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = classification
-            if is_numeric and isinstance(value, (int, float)):
-                ws[f'B{row}'].number_format = '0.00'
-            row += 1
-        
-        row += 1
-        ws[f'A{row}'] = "CLOUD GOVERNANCE"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        cloud_governance_metrics = [
-            ("ACUs por tipo de usuario", "N/A", "NO JSON", False),
-            ("Días restantes hasta presupuesto agotado", "N/A", "NO JSON", False),
-            ("Over-scope sessions (>N ACUs)", "N/A", "NO JSON", False),
-            ("% ACUs usados fuera de horario laboral", "N/A", "NO JSON", False),
-            ("Coste por entorno (Dev/Test/Prod)", "N/A", "NO JSON", False),
-            ("% proyectos con límites activos", "N/A", "NO JSON", False),
-            ("% de proyectos con presupuesto definido", "N/A", "NO JSON", False),
-            ("% de proyectos con alertas activas", "N/A", "NO JSON", False),
-            ("Tiempo medio de reacción a alerta 90%", "N/A", "NO JSON", False),
-        ]
-        
-        for metric_name, value, classification, is_numeric in cloud_governance_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = classification
-            if is_numeric and isinstance(value, (int, float)):
-                ws[f'B{row}'].number_format = '0.00'
-            row += 1
-        
-        row += 1
-        ws[f'A{row}'] = "FORECAST"
-        ws[f'A{row}'].font = Font(bold=True, size=11)
-        ws[f'A{row}'].fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
-        ws.merge_cells(f'A{row}:C{row}')
-        row += 1
-        
-        acus_por_mes = round(total_acus, 2) if total_acus > 0 else "N/A"
-        
-        forecast_metrics = [
-            ("Coste incremental PAYG", "N/A", "NO JSON", False),
-            ("ACUs por mes", acus_por_mes, "Dato a transformar", True),
-            ("ACUs por release", "N/A", "NO JSON", False),
-            ("Peak ACU rate", "N/A", "NO JSON", False),
-            ("Costo por entrega (delivery)", "N/A", "NO JSON", False),
-            ("Uso presupuestario (%)", "N/A", "NO JSON", False),
-            ("Cumplimiento presupuestario", "N/A", "NO JSON", False),
-            ("% de proyectos sobre presupuesto", "N/A", "NO JSON", False),
-            ("Desviación forecast vs real", "N/A", "NO JSON", False),
-            ("Tendencia semanal de ACUs", "N/A", "NO JSON", False),
-            ("Estacionalidad de consumo", "N/A", "NO JSON", False),
-            ("Proyección de gasto mensual", "N/A", "NO JSON", False),
-            ("Elasticidad del coste", "N/A", "NO JSON", False),
-            ("Costo incremental por usuario nuevo", "N/A", "NO JSON", False),
-            ("Coste por cliente (externo)", "N/A", "NO JSON", False),
-            ("Coste recuperable", "N/A", "NO JSON", False),
-            ("Desviación Forecast vs Real", "N/A", "NO JSON", False),
-        ]
-        
-        for metric_name, value, classification, is_numeric in forecast_metrics:
-            ws[f'A{row}'] = metric_name
-            ws[f'B{row}'] = value
-            ws[f'C{row}'] = classification
-            if is_numeric and isinstance(value, (int, float)):
-                ws[f'B{row}'].number_format = '0.00'
             row += 1
         
         if user_breakdown_list:
