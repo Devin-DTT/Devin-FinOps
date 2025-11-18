@@ -136,6 +136,7 @@ def export_summary_to_excel(
             row += 1
             
             categories = [
+                'MONTHLY TREND',
                 'COST VISIBILITY AND TRANSPARENCY',
                 'COST OPTIMIZATION',
                 'FINOPS ENABLEMENT',

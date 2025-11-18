@@ -40,6 +40,30 @@ API_ENDPOINTS = {
 }
 
 
+def calculate_monthly_acus_from_daily(consumption_by_date: Dict[str, float], year: int, month: int) -> float:
+    """
+    Calculate total ACUs for a specific month by filtering consumption_by_date.
+    
+    Args:
+        consumption_by_date: Dictionary mapping ISO date strings to ACU consumption
+        year: Target year (e.g., 2024)
+        month: Target month (1-12)
+    
+    Returns:
+        Total ACUs consumed in the specified month
+    """
+    from datetime import datetime
+    
+    total_acus = 0.0
+    target_year_month = f"{year:04d}-{month:02d}"
+    
+    for date_str, acus in consumption_by_date.items():
+        if date_str.startswith(target_year_month):
+            total_acus += acus
+    
+    return total_acus
+
+
 def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: MetricsConfig) -> Dict[str, Dict[str, Any]]:
     """
     Calculate base metrics with full traceability to JSON source paths.
@@ -122,17 +146,21 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
     return base_data
 
 
-def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str = None) -> Dict[str, Dict[str, Any]]:
     """
     Calculate FinOps metrics with full traceability for viable metrics and documentation for inviable metrics.
     Metrics are organized by category: COST VISIBILITY, COST OPTIMIZATION, FINOPS ENABLEMENT, CLOUD GOVERNANCE, FORECAST.
     
     Args:
         base_data: Dictionary containing base metrics with 'value' and 'source' keys
+        end_date: End date of reporting period (YYYY-MM-DD) for calculating monthly trends
     
     Returns:
         Dictionary containing all metrics (viable and inviable) with traceability information, organized by category
     """
+    from datetime import datetime
+    from dateutil.relativedelta import relativedelta
+    
     all_metrics = {}
     
     def get_value(key, default=0):
@@ -148,12 +176,109 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
     sessions_count = get_value('sessions_count', 0)
     unique_users = get_value('unique_users', 0)
     consumption_by_user = get_value('consumption_by_user', {})
+    consumption_by_date = get_value('consumption_by_date', {})
     
     # Calculate derived values
     cost_per_pr = total_cost / prs_merged if prs_merged > 0 else 0
     acus_per_pr = total_acus / prs_merged if prs_merged > 0 else 0
     acus_per_session = total_acus / sessions_count if sessions_count > 0 else 0
     prs_per_acu = prs_merged / total_acus if total_acus > 0 else 0
+    
+    
+    if end_date and consumption_by_date:
+        try:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            current_year = end_dt.year
+            current_month = end_dt.month
+            
+            # Calculate previous month
+            prev_dt = end_dt - relativedelta(months=1)
+            prev_year = prev_dt.year
+            prev_month = prev_dt.month
+            
+            # Calculate ACUs for current and previous month using the function
+            current_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, current_year, current_month)
+            prev_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, prev_year, prev_month)
+            
+            # Calculate costs
+            current_month_cost = current_month_acus * price_per_acu
+            prev_month_cost = prev_month_acus * price_per_acu
+            
+            # Calculate differences
+            absolute_difference = current_month_cost - prev_month_cost
+            
+            if prev_month_cost > 0:
+                percentage_difference = (absolute_difference / prev_month_cost) * 100
+                percentage_value = round(percentage_difference, 2)
+                percentage_formula = '(Current Cost - Previous Cost) / Previous Cost * 100'
+            else:
+                percentage_value = 'N/A (Costo Base Cero)'
+                percentage_formula = 'Cannot calculate (Previous Cost is zero)'
+            
+            all_metrics['Coste Total Mensual (Mes Actual)'] = {
+                'value': round(current_month_cost, 2),
+                'formula': f'ACUs {current_year}-{current_month:02d} * Price per ACU',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {current_year}-{current_month:02d}'},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+                ],
+                'category': 'MONTHLY TREND'
+            }
+            
+            all_metrics['Coste Total Mes Anterior'] = {
+                'value': round(prev_month_cost, 2),
+                'formula': f'ACUs {prev_year}-{prev_month:02d} * Price per ACU',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {prev_year}-{prev_month:02d}'},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+                ],
+                'category': 'MONTHLY TREND'
+            }
+            
+            all_metrics['Diferencia Absoluta (Mes actual vs mes anterior)'] = {
+                'value': round(absolute_difference, 2),
+                'formula': 'Current Month Cost - Previous Month Cost',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'Current: {round(current_month_cost, 2)}, Previous: {round(prev_month_cost, 2)}'}
+                ],
+                'category': 'MONTHLY TREND'
+            }
+            
+            all_metrics['% Mes actual vs mes anterior'] = {
+                'value': percentage_value,
+                'formula': percentage_formula,
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'Absolute Difference: {round(absolute_difference, 2)}, Previous Cost: {round(prev_month_cost, 2)}'}
+                ],
+                'category': 'MONTHLY TREND'
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate monthly cost comparison: {e}")
+            all_metrics['Coste Total Mensual (Mes Actual)'] = {
+                'value': 'N/A',
+                'reason': f'Failed to calculate: {str(e)}',
+                'external_data_required': 'Valid end_date and consumption_by_date',
+                'category': 'MONTHLY TREND'
+            }
+            all_metrics['Coste Total Mes Anterior'] = {
+                'value': 'N/A',
+                'reason': f'Failed to calculate: {str(e)}',
+                'external_data_required': 'Valid end_date and consumption_by_date',
+                'category': 'MONTHLY TREND'
+            }
+            all_metrics['Diferencia Absoluta (Mes actual vs mes anterior)'] = {
+                'value': 'N/A',
+                'reason': f'Failed to calculate: {str(e)}',
+                'external_data_required': 'Valid end_date and consumption_by_date',
+                'category': 'MONTHLY TREND'
+            }
+            all_metrics['% Mes actual vs mes anterior'] = {
+                'value': 'N/A',
+                'reason': f'Failed to calculate: {str(e)}',
+                'external_data_required': 'Valid end_date and consumption_by_date',
+                'category': 'MONTHLY TREND'
+            }
     
     
     all_metrics['Costo Total Mensual'] = {
@@ -1186,7 +1311,7 @@ def main():
     logger.info(f"Base metrics calculated: {len(base_data)} metrics")
     
     logger.info("Calculating FinOps metrics with traceability...")
-    finops_metrics = calculate_finops_metrics(base_data)
+    finops_metrics = calculate_finops_metrics(base_data, end_date=args.end)
     logger.info(f"FinOps metrics calculated: {len(finops_metrics)} metrics")
     
     generate_consumption_summary(all_api_data, all_metrics)
