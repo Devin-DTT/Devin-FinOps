@@ -40,25 +40,21 @@ API_ENDPOINTS = {
 }
 
 
-def calculate_monthly_acus_from_daily(consumption_by_date: Dict[str, float], year: int, month: int) -> float:
+def calculate_monthly_acus_from_daily(consumption_by_date: Dict[str, float], month_prefix_str: str) -> float:
     """
     Calculate total ACUs for a specific month by filtering consumption_by_date.
     
     Args:
         consumption_by_date: Dictionary mapping ISO date strings to ACU consumption
-        year: Target year (e.g., 2024)
-        month: Target month (1-12)
+        month_prefix_str: Target month prefix in YYYY-MM format (e.g., "2024-11")
     
     Returns:
         Total ACUs consumed in the specified month
     """
-    from datetime import datetime
-    
     total_acus = 0.0
-    target_year_month = f"{year:04d}-{month:02d}"
     
     for date_str, acus in consumption_by_date.items():
-        if date_str.startswith(target_year_month):
+        if date_str.startswith(month_prefix_str):
             total_acus += acus
     
     return total_acus
@@ -185,26 +181,32 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
     prs_per_acu = prs_merged / total_acus if total_acus > 0 else 0
     
     
-    if end_date and consumption_by_date:
+    if consumption_by_date:
         try:
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            current_year = end_dt.year
-            current_month = end_dt.month
+            if end_date:
+                reference_dt = datetime.strptime(end_date, '%Y-%m-%d')
+                logger.info(f"Using end_date for monthly calculation: {end_date}")
+            else:
+                reference_dt = datetime.now()
+                logger.info(f"Using current date for monthly calculation: {reference_dt.strftime('%Y-%m-%d')}")
             
-            # Calculate previous month
-            prev_dt = end_dt - relativedelta(months=1)
-            prev_year = prev_dt.year
-            prev_month = prev_dt.month
+            current_month_prefix = reference_dt.strftime("%Y-%m")
             
-            # Calculate ACUs for current and previous month using the function
-            current_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, current_year, current_month)
-            prev_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, prev_year, prev_month)
+            prev_dt = reference_dt - relativedelta(months=1)
+            previous_month_prefix = prev_dt.strftime("%Y-%m")
             
-            # Calculate costs
+            logger.info(f"Current month prefix: {current_month_prefix}")
+            logger.info(f"Previous month prefix: {previous_month_prefix}")
+            
+            current_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, current_month_prefix)
+            prev_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, previous_month_prefix)
+            
+            logger.info(f"Current month ACUs: {current_month_acus}")
+            logger.info(f"Previous month ACUs: {prev_month_acus}")
+            
             current_month_cost = current_month_acus * price_per_acu
             prev_month_cost = prev_month_acus * price_per_acu
             
-            # Calculate differences
             absolute_difference = current_month_cost - prev_month_cost
             
             if prev_month_cost > 0:
@@ -217,9 +219,9 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['Coste Total Mensual (Mes Actual)'] = {
                 'value': round(current_month_cost, 2),
-                'formula': f'ACUs {current_year}-{current_month:02d} * Price per ACU',
+                'formula': f'ACUs {current_month_prefix} * Price per ACU',
                 'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {current_year}-{current_month:02d}'},
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {current_month_prefix}'},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
                 ],
                 'category': 'MONTHLY TREND'
@@ -227,9 +229,9 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['Coste Total Mes Anterior'] = {
                 'value': round(prev_month_cost, 2),
-                'formula': f'ACUs {prev_year}-{prev_month:02d} * Price per ACU',
+                'formula': f'ACUs {previous_month_prefix} * Price per ACU',
                 'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {prev_year}-{prev_month:02d}'},
+                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {previous_month_prefix}'},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
                 ],
                 'category': 'MONTHLY TREND'
@@ -258,25 +260,25 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             all_metrics['Coste Total Mensual (Mes Actual)'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
-                'external_data_required': 'Valid end_date and consumption_by_date',
+                'external_data_required': 'Valid consumption_by_date',
                 'category': 'MONTHLY TREND'
             }
             all_metrics['Coste Total Mes Anterior'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
-                'external_data_required': 'Valid end_date and consumption_by_date',
+                'external_data_required': 'Valid consumption_by_date',
                 'category': 'MONTHLY TREND'
             }
             all_metrics['Diferencia Absoluta (Mes actual vs mes anterior)'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
-                'external_data_required': 'Valid end_date and consumption_by_date',
+                'external_data_required': 'Valid consumption_by_date',
                 'category': 'MONTHLY TREND'
             }
             all_metrics['% Mes actual vs mes anterior'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
-                'external_data_required': 'Valid end_date and consumption_by_date',
+                'external_data_required': 'Valid consumption_by_date',
                 'category': 'MONTHLY TREND'
             }
     
@@ -1158,8 +1160,20 @@ def main():
     user_chart_data = []
     user_breakdown_list = []
     
+    from datetime import datetime, timedelta
+    end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+    start_for_trend = (end_dt - timedelta(days=365)).strftime('%Y-%m-%d')
+    
+    params_by_endpoint = {
+        'consumption_daily': {
+            'start_date': start_for_trend,
+            'end_date': args.end
+        }
+    }
+    logger.info(f"Fetching consumption_daily with date range: {start_for_trend} to {args.end}")
+    
     try:
-        all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS)
+        all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS, params_by_endpoint=params_by_endpoint)
         data_adapter.save_raw_data(all_api_data)
         create_summary_csv(all_api_data)
         logger.info("Multi-endpoint data fetch completed successfully")

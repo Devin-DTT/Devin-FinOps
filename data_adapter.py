@@ -175,12 +175,14 @@ def write_raw_data(data: List[Dict[str, Any]], output_file: str = 'raw_usage_dat
         raise
 
 
-def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+def fetch_api_data(endpoint_list: Dict[str, str], params_by_endpoint: Optional[Dict[str, Dict[str, str]]] = None) -> Dict[str, Dict[str, Any]]:
     """
     Fetch data from multiple API endpoints.
     
     Args:
         endpoint_list: Dictionary of {endpoint_name: endpoint_path}
+        params_by_endpoint: Optional dictionary of {endpoint_name: {param_name: param_value}}
+                           to pass query parameters to specific endpoints
     
     Returns:
         Dictionary of {endpoint_name: {status_code, timestamp, response}}
@@ -212,10 +214,16 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
         
         full_url = f"{base_url.rstrip('/')}{endpoint_path}"
         
+        params = None
+        if params_by_endpoint and endpoint_name in params_by_endpoint:
+            params = params_by_endpoint[endpoint_name]
+            logger.info(f"    - Using params: {params}")
+        
         try:
             response = requests.get(
                 full_url,
                 headers=headers,
+                params=params,
                 timeout=30
             )
             
