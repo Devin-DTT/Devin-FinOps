@@ -125,12 +125,13 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
 def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
     Calculate FinOps metrics with full traceability for viable metrics and documentation for inviable metrics.
+    Metrics are organized by category: COST VISIBILITY, COST OPTIMIZATION, FINOPS ENABLEMENT, CLOUD GOVERNANCE, FORECAST.
     
     Args:
         base_data: Dictionary containing base metrics with 'value' and 'source' keys
     
     Returns:
-        Dictionary containing all metrics (viable and inviable) with traceability information
+        Dictionary containing all metrics (viable and inviable) with traceability information, organized by category
     """
     all_metrics = {}
     
@@ -143,6 +144,17 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
     total_acus = get_value('total_acus', 0)
     price_per_acu = get_value('price_per_acu', 0)
     total_cost = total_acus * price_per_acu
+    prs_merged = get_value('prs_merged', 0)
+    sessions_count = get_value('sessions_count', 0)
+    unique_users = get_value('unique_users', 0)
+    consumption_by_user = get_value('consumption_by_user', {})
+    
+    # Calculate derived values
+    cost_per_pr = total_cost / prs_merged if prs_merged > 0 else 0
+    acus_per_pr = total_acus / prs_merged if prs_merged > 0 else 0
+    acus_per_session = total_acus / sessions_count if sessions_count > 0 else 0
+    prs_per_acu = prs_merged / total_acus if total_acus > 0 else 0
+    
     
     all_metrics['Costo Total Mensual'] = {
         'value': total_cost,
@@ -150,7 +162,8 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
         'sources_used': [
             {'source_path': get_source('total_acus'), 'raw_value': total_acus},
             {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
-        ]
+        ],
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
     
     all_metrics['ACUs Totales Consumidos'] = {
@@ -158,35 +171,9 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
         'formula': 'Direct value from API',
         'sources_used': [
             {'source_path': get_source('total_acus'), 'raw_value': total_acus}
-        ]
+        ],
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
-    
-    prs_merged = get_value('prs_merged', 0)
-    cost_per_pr = total_cost / prs_merged if prs_merged > 0 else 0
-    
-    all_metrics['Relación coste–velocidad (Costo/PR Mergeado)'] = {
-        'value': cost_per_pr,
-        'formula': 'Total Cost / Total Merged PRs',
-        'sources_used': [
-            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
-            {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
-            {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
-        ]
-    }
-    
-    acus_per_pr = total_acus / prs_merged if prs_merged > 0 else 0
-    
-    all_metrics['ACUs por PR Mergeado'] = {
-        'value': acus_per_pr,
-        'formula': 'Total ACUs / Total Merged PRs',
-        'sources_used': [
-            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
-            {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
-        ]
-    }
-    
-    sessions_count = get_value('sessions_count', 0)
-    acus_per_session = total_acus / sessions_count if sessions_count > 0 else 0
     
     all_metrics['ACUs por Sesión'] = {
         'value': acus_per_session,
@@ -194,22 +181,18 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
         'sources_used': [
             {'source_path': get_source('total_acus'), 'raw_value': total_acus},
             {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
-        ]
+        ],
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
     
-    unique_users = get_value('unique_users', 0)
-    acus_per_developer = total_acus / unique_users if unique_users > 0 else 0
-    
-    all_metrics['ACUs por Desarrollador'] = {
-        'value': acus_per_developer,
-        'formula': 'Total ACUs / Unique Users',
+    all_metrics['ACUs por Usuario'] = {
+        'value': 'See detailed breakdown',
+        'formula': 'ACUs per User from consumption_by_user',
         'sources_used': [
-            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
-            {'source_path': get_source('unique_users'), 'raw_value': unique_users}
-        ]
+            {'source_path': get_source('consumption_by_user'), 'raw_value': f'{len(consumption_by_user)} users'}
+        ],
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
-    
-    consumption_by_user = get_value('consumption_by_user', {})
     
     all_metrics['Costo por Usuario'] = {
         'value': 'See detailed breakdown',
@@ -217,61 +200,101 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
         'sources_used': [
             {'source_path': get_source('consumption_by_user'), 'raw_value': f'{len(consumption_by_user)} users'},
             {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
-        ]
+        ],
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
     
-    all_metrics['Total de Sesiones'] = {
-        'value': sessions_count,
-        'formula': 'Direct value from API',
-        'sources_used': [
-            {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
-        ]
+    all_metrics['Total Previous Month Cost'] = {
+        'value': 'N/A',
+        'reason': 'Requires consumption data from the previous reporting period.',
+        'external_data_required': 'consumption_daily from the previous period.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
     
-    all_metrics['Usuarios Únicos'] = {
-        'value': unique_users,
-        'formula': 'Count of unique users from consumption data',
-        'sources_used': [
-            {'source_path': get_source('unique_users'), 'raw_value': unique_users}
-        ]
+    all_metrics['ACUs total mes anterior'] = {
+        'value': 'N/A',
+        'reason': 'Requires consumption data from the previous reporting period.',
+        'external_data_required': 'consumption_daily from the previous period.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
-
-    all_metrics['ACUs total mes'] = {
-        'value': total_acus,
-        'formula': 'Total ACUs (same as ACUs Totales Consumidos)',
-        'sources_used': [
-            {'source_path': get_source('total_acus'), 'raw_value': total_acus}
-        ]
+    
+    all_metrics['Cost by Repository/PR'] = {
+        'value': 'N/A',
+        'reason': 'Requires mapping of ACU consumption to specific repositories or PRs.',
+        'external_data_required': 'Mapping ACUs to Repo/PR ID.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
-
-    all_metrics['Costo total Devin'] = {
-        'value': total_cost,
-        'formula': 'Total ACUs * Price per ACU (same as Costo Total Mensual)',
-        'sources_used': [
-            {'source_path': get_source('total_acus'), 'raw_value': total_acus},
-            {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
-        ]
+    
+    all_metrics['Cost by Task Type'] = {
+        'value': 'N/A',
+        'reason': 'Requires task type classification for each session.',
+        'external_data_required': 'Etiqueta task_type per session.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
     }
-
+    
+    all_metrics['Cost by Organization'] = {
+        'value': 'N/A',
+        'reason': 'Requires full organizational breakdown from API.',
+        'external_data_required': 'Full breakdown consumption_by_org_id from API.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    all_metrics['Cost per Group (IdP)'] = {
+        'value': 'N/A',
+        'reason': 'Requires mapping of users to identity provider groups.',
+        'external_data_required': 'Mapping User ID to Group ID (from /groups).',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    all_metrics['Coste por unidad de negocio / tribu / área'] = {
+        'value': 'N/A',
+        'reason': 'Requires mapping of organizations to business units.',
+        'external_data_required': 'Mapping Org ID to Business Unit.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    all_metrics['Coste por proyecto / producto'] = {
+        'value': 'N/A',
+        'reason': 'Requires project/product tagging in consumption data.',
+        'external_data_required': 'Etiqueta project_id in consumption data.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    all_metrics['% coste compartido (shared)'] = {
+        'value': 'N/A',
+        'reason': 'Requires shared resource allocation indicators.',
+        'external_data_required': 'shared_acus indicator or consumption_type field.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    all_metrics['% de consumo trazable (cost allocation)'] = {
+        'value': 'N/A',
+        'reason': 'Requires baseline of unaccounted costs.',
+        'external_data_required': 'Baseline of unaccounted Total Cost.',
+        'category': 'COST VISIBILITY AND TRANSPARENCY'
+    }
+    
+    
     all_metrics['ACUs promedio por PR mergeado'] = {
         'value': acus_per_pr,
         'formula': 'Total ACUs / Total Merged PRs',
         'sources_used': [
             {'source_path': get_source('total_acus'), 'raw_value': total_acus},
             {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
-        ]
+        ],
+        'category': 'COST OPTIMIZATION'
     }
-
-    prs_per_acu = prs_merged / total_acus if total_acus > 0 else 0
+    
     all_metrics['Promedio de PRs por ACU'] = {
         'value': prs_per_acu,
         'formula': 'Total Merged PRs / Total ACUs',
         'sources_used': [
             {'source_path': get_source('prs_merged'), 'raw_value': prs_merged},
             {'source_path': get_source('total_acus'), 'raw_value': total_acus}
-        ]
+        ],
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Costo por PR mergeado'] = {
         'value': cost_per_pr,
         'formula': 'Total Cost / Total Merged PRs',
@@ -279,373 +302,351 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]]) -> Dict[str, 
             {'source_path': get_source('total_acus'), 'raw_value': total_acus},
             {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
             {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
-        ]
+        ],
+        'category': 'COST OPTIMIZATION'
     }
-
-    all_metrics['ACUs por Usuario'] = {
-        'value': 'See detailed breakdown',
-        'formula': 'ACUs per User from consumption_by_user',
-        'sources_used': [
-            {'source_path': get_source('consumption_by_user'), 'raw_value': f'{len(consumption_by_user)} users'}
-        ]
-    }
-
-    all_metrics['Total Previous Month Cost'] = {
-        'value': 'N/A',
-        'reason': 'Requires consumption data from the previous reporting period.',
-        'external_data_required': 'consumption_daily from the previous period.'
-    }
-
-    all_metrics['ACUs total mes anterior'] = {
-        'value': 'N/A',
-        'reason': 'Requires consumption data from the previous reporting period.',
-        'external_data_required': 'consumption_daily from the previous period.'
-    }
-
-    all_metrics['Cost by Repository/PR'] = {
-        'value': 'N/A',
-        'reason': 'Requires mapping of ACU consumption to specific repositories or PRs.',
-        'external_data_required': 'Mapping ACUs to Repo/PR ID.'
-    }
-
-    all_metrics['Cost by Task Type'] = {
-        'value': 'N/A',
-        'reason': 'Requires task type classification for each session.',
-        'external_data_required': 'Etiqueta task_type per session.'
-    }
-
-    all_metrics['Cost by Organization'] = {
-        'value': 'N/A',
-        'reason': 'Requires full organizational breakdown from API.',
-        'external_data_required': 'Full breakdown consumption_by_org_id from API.'
-    }
-
-    all_metrics['Cost per Group (IdP)'] = {
-        'value': 'N/A',
-        'reason': 'Requires mapping of users to identity provider groups.',
-        'external_data_required': 'Mapping User ID to Group ID (from /groups).'
-    }
-
-    all_metrics['Coste por unidad de negocio / tribu / área'] = {
-        'value': 'N/A',
-        'reason': 'Requires mapping of organizations to business units.',
-        'external_data_required': 'Mapping Org ID to Business Unit.'
-    }
-
-    all_metrics['Coste por proyecto / producto'] = {
-        'value': 'N/A',
-        'reason': 'Requires project/product tagging in consumption data.',
-        'external_data_required': 'Etiqueta project_id in consumption data.'
-    }
-
-    all_metrics['% coste compartido (shared)'] = {
-        'value': 'N/A',
-        'reason': 'Requires shared resource allocation indicators.',
-        'external_data_required': 'shared_acus indicator or consumption_type field.'
-    }
-
-    all_metrics['% de consumo trazable (cost allocation)'] = {
-        'value': 'N/A',
-        'reason': 'Requires baseline of unaccounted costs.',
-        'external_data_required': 'Baseline of unaccounted Total Cost.'
-    }
-
+    
     all_metrics['Coste por plan (Core/Teams)'] = {
         'value': 'N/A',
         'reason': 'Requires subscription plan mapping for users.',
-        'external_data_required': 'Mapping User ID to Subscription Plan.'
+        'external_data_required': 'Mapping User ID to Subscription Plan.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ACUs por línea de código'] = {
         'value': 'N/A',
         'reason': 'Requires code change metrics (LOC) from sessions.',
-        'external_data_required': 'Lines of Code (LOC) generated/modified.'
+        'external_data_required': 'Lines of Code (LOC) generated/modified.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ACUs por outcome (tarea completada)'] = {
         'value': 'N/A',
         'reason': 'Requires outcome status tagging for sessions.',
-        'external_data_required': 'Etiqueta outcome_status per session.'
+        'external_data_required': 'Etiqueta outcome_status per session.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ROI por sesión'] = {
         'value': 'N/A',
         'reason': 'Requires monetary value estimation for session outcomes.',
-        'external_data_required': 'Monetary Value of the session\'s outcome.'
+        'external_data_required': 'Monetary Value of the session\'s outcome.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['% sesiones con outcome'] = {
         'value': 'N/A',
         'reason': 'Requires outcome status tracking for sessions.',
-        'external_data_required': 'Outcome status (success/failure) per session.'
+        'external_data_required': 'Outcome status (success/failure) per session.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['% sesiones sin outcome'] = {
         'value': 'N/A',
         'reason': 'Requires outcome status tracking for sessions.',
-        'external_data_required': 'Outcome status (success/failure) per session.'
+        'external_data_required': 'Outcome status (success/failure) per session.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ACUs por hora productiva'] = {
         'value': 'N/A',
         'reason': 'Requires session duration tracking in hours.',
-        'external_data_required': 'Session Duration (in minutes/hours).'
+        'external_data_required': 'Session Duration (in minutes/hours).',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['% sesiones reintentadas'] = {
         'value': 'N/A',
         'reason': 'Requires session retry count tracking.',
-        'external_data_required': 'session_retry_count metric.'
+        'external_data_required': 'session_retry_count metric.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Tasa de éxito de PR'] = {
         'value': 'N/A',
         'reason': 'Requires tracking of PRs opened vs PRs merged.',
-        'external_data_required': 'prs_opened metric.'
+        'external_data_required': 'prs_opened metric.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ACUs desperdiciados (sin ROI)'] = {
         'value': 'N/A',
         'reason': 'Requires waste indicator for failed sessions.',
-        'external_data_required': 'Waste indicator (e.g., ACUs from failed sessions).'
+        'external_data_required': 'Waste indicator (e.g., ACUs from failed sessions).',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Sesiones idle (>X min)'] = {
         'value': 'N/A',
         'reason': 'Requires session duration and idle time threshold.',
-        'external_data_required': 'Session Duration and idle time threshold.'
+        'external_data_required': 'Session Duration and idle time threshold.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['% tareas redundantes / duplicadas'] = {
         'value': 'N/A',
         'reason': 'Requires task fingerprinting or deduplication logic.',
-        'external_data_required': 'Task fingerprint or task description hash.'
+        'external_data_required': 'Task fingerprint or task description hash.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Ahorro FinOps (%)'] = {
         'value': 'N/A',
         'reason': 'Requires manual cost baseline or comparative vendor cost.',
-        'external_data_required': 'Manual Cost Baseline or comparative vendor cost.'
+        'external_data_required': 'Manual Cost Baseline or comparative vendor cost.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Ahorro FinOps acumulado'] = {
         'value': 'N/A',
         'reason': 'Requires historical savings data and baseline costs.',
-        'external_data_required': 'Manual Cost Baseline or comparative vendor cost.'
+        'external_data_required': 'Manual Cost Baseline or comparative vendor cost.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['ACU Efficiency Index (AEI)'] = {
         'value': 'N/A',
         'reason': 'Requires compounding data from other inviable metrics.',
-        'external_data_required': 'Requires compounding data from other inviable metrics.'
+        'external_data_required': 'Requires compounding data from other inviable metrics.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Cost Velocity Ratio (CVR)'] = {
         'value': 'N/A',
         'reason': 'Requires compounding data from other inviable metrics.',
-        'external_data_required': 'Requires compounding data from other inviable metrics.'
+        'external_data_required': 'Requires compounding data from other inviable metrics.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
     all_metrics['Waste-to-Outcome Ratio (WOR)'] = {
         'value': 'N/A',
         'reason': 'Requires compounding data from other inviable metrics.',
-        'external_data_required': 'Requires compounding data from other inviable metrics.'
+        'external_data_required': 'Requires compounding data from other inviable metrics.',
+        'category': 'COST OPTIMIZATION'
     }
-
+    
+    
     all_metrics['Lead time con Devin vs humano'] = {
         'value': 'N/A',
         'reason': 'Requires human baseline time comparison data.',
-        'external_data_required': 'Session Duration vs Human Baseline Time.'
+        'external_data_required': 'Session Duration vs Human Baseline Time.',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
     all_metrics['Prompts ineficientes (alto ACU / bajo output)'] = {
         'value': 'N/A',
         'reason': 'Requires prompt quality and output metrics.',
-        'external_data_required': 'Requires Prompt quality/output metrics.'
+        'external_data_required': 'Requires Prompt quality/output metrics.',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
     all_metrics['Prompts eficientes (%)'] = {
         'value': 'N/A',
         'reason': 'Requires prompt quality and output metrics.',
-        'external_data_required': 'Requires Prompt quality/output metrics.'
+        'external_data_required': 'Requires Prompt quality/output metrics.',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
     all_metrics['Prompt Efficiency Index (PEI)'] = {
         'value': 'N/A',
         'reason': 'Requires prompt quality and output metrics.',
-        'external_data_required': 'Requires Prompt quality/output metrics.'
+        'external_data_required': 'Requires Prompt quality/output metrics.',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
     all_metrics['Team Efficiency Spread'] = {
         'value': 'N/A',
         'reason': 'Requires user profile and training data.',
-        'external_data_required': 'Requires User profile data (training_status).'
+        'external_data_required': 'Requires User profile data (training_status).',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
     all_metrics['% de usuarios formados en eficiencia de prompts'] = {
         'value': 'N/A',
         'reason': 'Requires user profile and training data.',
-        'external_data_required': 'Requires User profile data (training_status).'
+        'external_data_required': 'Requires User profile data (training_status).',
+        'category': 'FINOPS ENABLEMENT'
     }
-
+    
+    
     all_metrics['ACUs por tipo de usuario'] = {
         'value': 'N/A',
         'reason': 'Requires user role/level classification.',
-        'external_data_required': 'Mapping User ID to User Role/Level.'
+        'external_data_required': 'Mapping User ID to User Role/Level.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['Días restantes hasta presupuesto agotado'] = {
         'value': 'N/A',
         'reason': 'Requires total budget and consumption forecast.',
-        'external_data_required': 'Total Budget and Consumption Forecast.'
+        'external_data_required': 'Total Budget and Consumption Forecast.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['% proyectos con límites activos'] = {
         'value': 'N/A',
         'reason': 'Requires project-level budget limit configuration.',
-        'external_data_required': 'Total Budget and Consumption Forecast.'
+        'external_data_required': 'Total Budget and Consumption Forecast.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['% de proyectos con presupuesto definido'] = {
         'value': 'N/A',
         'reason': 'Requires project-level budget configuration.',
-        'external_data_required': 'Total Budget and Consumption Forecast.'
+        'external_data_required': 'Total Budget and Consumption Forecast.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['Over-scope sessions (>N ACUs)'] = {
         'value': 'N/A',
         'reason': 'Requires maximum ACU threshold configuration per session.',
-        'external_data_required': 'Maximum ACU Threshold per session.'
+        'external_data_required': 'Maximum ACU Threshold per session.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['% ACUs usados fuera de horario laboral'] = {
         'value': 'N/A',
         'reason': 'Requires consumption timestamp and working hour definition.',
-        'external_data_required': 'Consumption timestamp + Working Hour Definition.'
+        'external_data_required': 'Consumption timestamp + Working Hour Definition.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['Coste por entorno (Dev/Test/Prod)'] = {
         'value': 'N/A',
         'reason': 'Requires environment tagging for sessions.',
-        'external_data_required': 'Etiqueta environment per session.'
+        'external_data_required': 'Etiqueta environment per session.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['% de proyectos con alertas activas'] = {
         'value': 'N/A',
         'reason': 'Requires alert system configuration data.',
-        'external_data_required': 'Alert system logs/response time.'
+        'external_data_required': 'Alert system logs/response time.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
+    
     all_metrics['Tiempo medio de reacción a alerta 90%'] = {
         'value': 'N/A',
         'reason': 'Requires alert system logs and response time tracking.',
-        'external_data_required': 'Alert system logs/response time.'
+        'external_data_required': 'Alert system logs/response time.',
+        'category': 'CLOUD GOVERNANCE'
     }
-
-    all_metrics['Coste incremental PAYG'] = {
-        'value': 'N/A',
-        'reason': 'Requires complex historical data and forecasting models.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
-    }
-
+    
+    
     all_metrics['ACUs por mes'] = {
         'value': total_acus,
         'formula': 'Total ACUs for the reporting period',
         'sources_used': [
             {'source_path': get_source('total_acus'), 'raw_value': total_acus}
-        ]
+        ],
+        'category': 'FORECAST'
     }
-
+    
+    all_metrics['Coste incremental PAYG'] = {
+        'value': 'N/A',
+        'reason': 'Requires complex historical data and forecasting models.',
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
+    }
+    
     all_metrics['ACUs por release'] = {
         'value': 'N/A',
         'reason': 'Requires release tagging and tracking.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Peak ACU rate'] = {
         'value': 'N/A',
         'reason': 'Requires time-series ACU consumption data.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Costo por entrega (delivery)'] = {
         'value': 'N/A',
         'reason': 'Requires delivery/release tracking.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Uso presupuestario (%)'] = {
         'value': 'N/A',
         'reason': 'Requires total budget configuration.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Cumplimiento presupuestario'] = {
         'value': 'N/A',
         'reason': 'Requires total budget configuration and tracking.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['% de proyectos sobre presupuesto'] = {
         'value': 'N/A',
         'reason': 'Requires project-level budget tracking.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Desviación forecast vs real'] = {
         'value': 'N/A',
         'reason': 'Requires historical forecast data.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Tendencia semanal de ACUs'] = {
         'value': 'N/A',
         'reason': 'Requires time-series weekly ACU data.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Estacionalidad de consumo'] = {
         'value': 'N/A',
         'reason': 'Requires long-term historical consumption patterns.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Proyección de gasto mensual'] = {
         'value': 'N/A',
         'reason': 'Requires forecasting model and historical data.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Elasticidad del coste'] = {
         'value': 'N/A',
         'reason': 'Requires cost sensitivity analysis.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Costo incremental por usuario nuevo'] = {
         'value': 'N/A',
         'reason': 'Requires user onboarding cost tracking.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Coste por cliente (externo)'] = {
         'value': 'N/A',
         'reason': 'Requires external client mapping.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
+    
     all_metrics['Coste recuperable'] = {
         'value': 'N/A',
         'reason': 'Requires cost recovery tracking and billing data.',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
+        'external_data_required': 'Requires complex historical data and forecasting models.',
+        'category': 'FORECAST'
     }
-
-    all_metrics['Desviación Forecast vs Real'] = {
-        'value': 'N/A',
-        'reason': 'Requires historical forecast data (duplicate metric).',
-        'external_data_required': 'Requires complex historical data and forecasting models.'
-    }
-
+    
     return all_metrics
 
 
