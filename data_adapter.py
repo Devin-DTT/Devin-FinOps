@@ -175,12 +175,14 @@ def write_raw_data(data: List[Dict[str, Any]], output_file: str = 'raw_usage_dat
         raise
 
 
-def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+def fetch_api_data(endpoint_list: Dict[str, str], params_by_endpoint: Optional[Dict[str, Dict[str, str]]] = None) -> Dict[str, Dict[str, Any]]:
     """
     Fetch data from multiple API endpoints.
     
     Args:
         endpoint_list: Dictionary of {endpoint_name: endpoint_path}
+        params_by_endpoint: Optional dictionary of {endpoint_name: {param_name: param_value}}
+                           to pass query parameters to specific endpoints
     
     Returns:
         Dictionary of {endpoint_name: {status_code, timestamp, response}}
@@ -212,10 +214,16 @@ def fetch_api_data(endpoint_list: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
         
         full_url = f"{base_url.rstrip('/')}{endpoint_path}"
         
+        params = None
+        if params_by_endpoint and endpoint_name in params_by_endpoint:
+            params = params_by_endpoint[endpoint_name]
+            logger.info(f"    - Using params: {params}")
+        
         try:
             response = requests.get(
                 full_url,
                 headers=headers,
+                params=params,
                 timeout=30
             )
             
@@ -438,11 +446,26 @@ def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.jso
 
 def main(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Main execution function for data adapter."""
+    from datetime import datetime, timedelta
+    
     setup_logging()
 
     logger.info("=" * 60)
     logger.info("FinOps Data Adapter - Cognition API Integration")
     logger.info("=" * 60)
+    
+    if end_date and not start_date:
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+        start_dt = end_dt - timedelta(days=365)
+        start_date = start_dt.strftime('%Y-%m-%d')
+        logger.info(f"Auto-calculated start_date (12 months before end_date): {start_date}")
+    
+    if not start_date and not end_date:
+        end_dt = datetime.now().date()
+        start_dt = end_dt - timedelta(days=365)
+        start_date = start_dt.strftime('%Y-%m-%d')
+        end_date = end_dt.strftime('%Y-%m-%d')
+        logger.info(f"Auto-calculated date range (last 12 months): {start_date} to {end_date}")
     
     if start_date or end_date:
         logger.info(f"Date range filter: {start_date} to {end_date}")
