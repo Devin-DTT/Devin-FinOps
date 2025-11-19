@@ -40,7 +40,7 @@ API_ENDPOINTS = {
 }
 
 
-def calculate_monthly_acus_from_daily(consumption_by_date: Dict[str, float], month_prefix_str: str) -> float:
+def calculate_monthly_acus(consumption_by_date: Dict[str, float], month_prefix_str: str) -> float:
     """
     Calculate total ACUs for a specific month by filtering consumption_by_date.
     
@@ -58,6 +58,20 @@ def calculate_monthly_acus_from_daily(consumption_by_date: Dict[str, float], mon
             total_acus += acus
     
     return total_acus
+
+
+def calculate_cost_from_acus(acus: float, cost_per_acu: float) -> float:
+    """
+    Calculate cost from ACUs by applying the cost multiplier.
+    
+    Args:
+        acus: ACU value to convert to cost
+        cost_per_acu: Cost per ACU constant (e.g., 0.05)
+    
+    Returns:
+        Calculated cost formatted to two decimal places
+    """
+    return round(acus * cost_per_acu, 2)
 
 
 def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: MetricsConfig) -> Dict[str, Dict[str, Any]]:
@@ -198,14 +212,14 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             logger.info(f"Current month prefix: {current_month_prefix}")
             logger.info(f"Previous month prefix: {previous_month_prefix}")
             
-            current_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, current_month_prefix)
-            prev_month_acus = calculate_monthly_acus_from_daily(consumption_by_date, previous_month_prefix)
+            current_month_acus = calculate_monthly_acus(consumption_by_date, current_month_prefix)
+            prev_month_acus = calculate_monthly_acus(consumption_by_date, previous_month_prefix)
             
             logger.info(f"Current month ACUs: {current_month_acus}")
             logger.info(f"Previous month ACUs: {prev_month_acus}")
             
-            current_month_cost = current_month_acus * price_per_acu
-            prev_month_cost = prev_month_acus * price_per_acu
+            current_month_cost = calculate_cost_from_acus(current_month_acus, price_per_acu)
+            prev_month_cost = calculate_cost_from_acus(prev_month_acus, price_per_acu)
             
             absolute_difference = current_month_cost - prev_month_cost
             
@@ -217,69 +231,69 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
                 percentage_value = 'N/A (Costo Base Cero)'
                 percentage_formula = 'Cannot calculate (Previous Cost is zero)'
             
-            all_metrics['Coste Total Mensual (Mes Actual)'] = {
-                'value': round(current_month_cost, 2),
-                'formula': f'ACUs {current_month_prefix} * Price per ACU',
+            all_metrics['ACUs Mes'] = {
+                'value': round(current_month_acus, 2),
+                'formula': f'Python Function (calculate_monthly_acus) filtering data for {current_month_prefix}',
                 'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {current_month_prefix}'},
+                    {'source_path': 'consumption_daily.consumption_by_date', 'raw_value': f'ACUs filtered for {current_month_prefix}'}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['ACUs Mes Anterior'] = {
+                'value': round(prev_month_acus, 2),
+                'formula': f'Python Function (calculate_monthly_acus) filtering data for {previous_month_prefix}',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.consumption_by_date', 'raw_value': f'ACUs filtered for {previous_month_prefix}'}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Coste Mes'] = {
+                'value': current_month_cost,
+                'formula': f'Python Function (calculate_cost_from_acus): ACUs Mes × {price_per_acu} (COST_PER_ACU)',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(current_month_acus, 2)},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
                 ],
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
             
-            all_metrics['Coste Total Mes Anterior'] = {
-                'value': round(prev_month_cost, 2),
-                'formula': f'ACUs {previous_month_prefix} * Price per ACU',
+            all_metrics['Coste Mes Anterior'] = {
+                'value': prev_month_cost,
+                'formula': f'Python Function (calculate_cost_from_acus): ACUs Mes Anterior × {price_per_acu} (COST_PER_ACU)',
                 'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'ACUs filtered from consumption_by_date for {previous_month_prefix}'},
+                    {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(prev_month_acus, 2)},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
                 ],
-                'category': 'MONTHLY TREND'
-            }
-            
-            all_metrics['Diferencia Absoluta (Mes actual vs mes anterior)'] = {
-                'value': round(absolute_difference, 2),
-                'formula': 'Current Month Cost - Previous Month Cost',
-                'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'Current: {round(current_month_cost, 2)}, Previous: {round(prev_month_cost, 2)}'}
-                ],
-                'category': 'MONTHLY TREND'
-            }
-            
-            all_metrics['% Mes actual vs mes anterior'] = {
-                'value': percentage_value,
-                'formula': percentage_formula,
-                'sources_used': [
-                    {'source_path': 'Python Function (calculate_monthly_acus_from_daily)', 'raw_value': f'Absolute Difference: {round(absolute_difference, 2)}, Previous Cost: {round(prev_month_cost, 2)}'}
-                ],
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
             
         except Exception as e:
             logger.warning(f"Failed to calculate monthly cost comparison: {e}")
-            all_metrics['Coste Total Mensual (Mes Actual)'] = {
+            all_metrics['ACUs Mes'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
                 'external_data_required': 'Valid consumption_by_date',
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
-            all_metrics['Coste Total Mes Anterior'] = {
+            all_metrics['ACUs Mes Anterior'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
                 'external_data_required': 'Valid consumption_by_date',
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
-            all_metrics['Diferencia Absoluta (Mes actual vs mes anterior)'] = {
+            all_metrics['Coste Mes'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
                 'external_data_required': 'Valid consumption_by_date',
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
-            all_metrics['% Mes actual vs mes anterior'] = {
+            all_metrics['Coste Mes Anterior'] = {
                 'value': 'N/A',
                 'reason': f'Failed to calculate: {str(e)}',
                 'external_data_required': 'Valid consumption_by_date',
-                'category': 'MONTHLY TREND'
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
     
     
