@@ -197,17 +197,13 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
     
     if consumption_by_date:
         try:
-            if end_date:
-                reference_dt = datetime.strptime(end_date, '%Y-%m-%d')
-                logger.info(f"Using end_date for monthly calculation: {end_date}")
-            else:
-                reference_dt = datetime.now()
-                logger.info(f"Using current date for monthly calculation: {reference_dt.strftime('%Y-%m-%d')}")
+            today = datetime.now()
+            logger.info(f"Using system date for monthly calculation: {today.strftime('%Y-%m-%d')}")
             
-            current_month_prefix = reference_dt.strftime("%Y-%m")
+            current_month_prefix = today.strftime("%Y-%m")
             
-            prev_dt = reference_dt - relativedelta(months=1)
-            previous_month_prefix = prev_dt.strftime("%Y-%m")
+            previous_month = today - relativedelta(months=1)
+            previous_month_prefix = previous_month.strftime("%Y-%m")
             
             logger.info(f"Current month prefix: {current_month_prefix}")
             logger.info(f"Previous month prefix: {previous_month_prefix}")
@@ -233,6 +229,7 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['ACUs Mes'] = {
                 'value': round(current_month_acus, 2),
+                'raw_data_value': round(current_month_acus, 2),
                 'formula': f'Python Function (calculate_monthly_acus) filtering data for {current_month_prefix}',
                 'sources_used': [
                     {'source_path': 'consumption_daily.consumption_by_date', 'raw_value': f'ACUs filtered for {current_month_prefix}'}
@@ -242,6 +239,7 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['ACUs Mes Anterior'] = {
                 'value': round(prev_month_acus, 2),
+                'raw_data_value': round(prev_month_acus, 2),
                 'formula': f'Python Function (calculate_monthly_acus) filtering data for {previous_month_prefix}',
                 'sources_used': [
                     {'source_path': 'consumption_daily.consumption_by_date', 'raw_value': f'ACUs filtered for {previous_month_prefix}'}
@@ -251,6 +249,7 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['Coste Mes'] = {
                 'value': current_month_cost,
+                'raw_data_value': round(current_month_acus, 2),
                 'formula': f'Python Function (calculate_cost_from_acus): ACUs Mes × {price_per_acu} (COST_PER_ACU)',
                 'sources_used': [
                     {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(current_month_acus, 2)},
@@ -261,6 +260,7 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
             
             all_metrics['Coste Mes Anterior'] = {
                 'value': prev_month_cost,
+                'raw_data_value': round(prev_month_acus, 2),
                 'formula': f'Python Function (calculate_cost_from_acus): ACUs Mes Anterior × {price_per_acu} (COST_PER_ACU)',
                 'sources_used': [
                     {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(prev_month_acus, 2)},

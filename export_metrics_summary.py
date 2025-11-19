@@ -53,21 +53,23 @@ def export_summary_to_excel(
         ws.column_dimensions['B'].width = 20
         ws.column_dimensions['C'].width = 50
         ws.column_dimensions['D'].width = 50
+        ws.column_dimensions['E'].width = 25
         
         row = 1
         
         ws[f'A{row}'] = "Visibilidad y transparencia de costes"
         ws[f'A{row}'].font = section_font
         ws[f'A{row}'].fill = section_fill
-        ws.merge_cells(f'A{row}:D{row}')
+        ws.merge_cells(f'A{row}:E{row}')
         row += 1
         
         ws[f'A{row}'] = "METRICA FINOPS"
         ws[f'B{row}'] = "RESULTADO"
         ws[f'C{row}'] = "FORMULA / LOGICA"
         ws[f'D{row}'] = "FUENTE JSON"
+        ws[f'E{row}'] = "DATO EXTRAÍDO"
         
-        for col in [f'A{row}', f'B{row}', f'C{row}', f'D{row}']:
+        for col in [f'A{row}', f'B{row}', f'C{row}', f'D{row}', f'E{row}']:
             ws[col].font = header_font
             ws[col].fill = header_fill
             ws[col].alignment = header_alignment
@@ -106,12 +108,22 @@ def export_summary_to_excel(
                         else:
                             ws[f'D{row}'] = ''
                         ws[f'D{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                        
+                        raw_data = metric_data.get('raw_data_value', 'N/A')
+                        if isinstance(raw_data, (int, float)) and raw_data != 'N/A':
+                            ws[f'E{row}'] = round(raw_data, 2)
+                            ws[f'E{row}'].number_format = '0.00'
+                        else:
+                            ws[f'E{row}'] = str(raw_data)
+                        ws[f'E{row}'].alignment = Alignment(horizontal="right", vertical="top")
                     
                     elif 'external_data_required' in metric_data:
                         ws[f'C{row}'] = metric_data.get('reason', '')
                         ws[f'C{row}'].alignment = Alignment(wrap_text=True, vertical="top")
                         ws[f'D{row}'] = metric_data.get('external_data_required', '')
                         ws[f'D{row}'].alignment = Alignment(wrap_text=True, vertical="top")
+                        ws[f'E{row}'] = 'N/A'
+                        ws[f'E{row}'].alignment = Alignment(horizontal="right", vertical="top")
                     
                     row += 1
             
