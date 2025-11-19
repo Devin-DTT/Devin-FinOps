@@ -269,6 +269,28 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
                 'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
             
+            all_metrics['ACUs consumidos totales'] = {
+                'value': round(total_acus, 2),
+                'raw_data_value': round(total_acus, 2),
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            total_cost_calculated = calculate_cost_from_acus(total_acus, price_per_acu)
+            all_metrics['Coste consumo total'] = {
+                'value': round(total_cost_calculated, 2),
+                'raw_data_value': round(total_acus, 2),
+                'formula': f'Python Function (calculate_cost_from_acus): Total ACUs × {price_per_acu} (COST_PER_ACU)',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
         except Exception as e:
             logger.warning(f"Failed to calculate monthly cost comparison: {e}")
             all_metrics['ACUs Mes'] = {
