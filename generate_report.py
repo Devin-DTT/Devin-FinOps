@@ -155,13 +155,11 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
             if isinstance(members_response, str):
                 members_response = json.loads(members_response)
             if isinstance(members_response, dict):
-                items = members_response.get('items', {})
-                if isinstance(items, dict):
-                    user_count = items.get('total', 0)
-                    base_data['user_count'] = {
-                        'value': user_count,
-                        'source': 'members.response.items.total'
-                    }
+                user_count = members_response.get('total', 0)
+                base_data['user_count'] = {
+                    'value': user_count,
+                    'source': 'members.response.total'
+                }
         except (json.JSONDecodeError, AttributeError, TypeError) as e:
             logger.warning(f"Failed to extract members data: {e}")
     
