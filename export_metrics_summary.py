@@ -76,7 +76,7 @@ def export_summary_to_excel(
         row += 1
         
         if finops_metrics:
-            target_metrics = ['ACUs Mes', 'ACUs Mes Anterior', 'Coste Mes', 'Coste Mes Anterior']
+            target_metrics = ['ACUs Mes', 'ACUs Mes Anterior', 'Coste Mes', 'Coste Mes Anterior', 'ACUs consumidos totales', 'Coste consumo total']
             
             for metric_name in target_metrics:
                 if metric_name in finops_metrics:
