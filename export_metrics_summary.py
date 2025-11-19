@@ -76,7 +76,22 @@ def export_summary_to_excel(
         row += 1
         
         if finops_metrics:
-            target_metrics = ['ACUs Mes', 'ACUs Mes Anterior', 'Coste Mes', 'Coste Mes Anterior', 'ACUs consumidos totales', 'Coste consumo total']
+            target_metrics = [
+                'ACUs Mes', 
+                'ACUs Mes Anterior', 
+                'Coste Mes', 
+                'Coste Mes Anterior', 
+                'ACUs consumidos totales', 
+                'Coste consumo total',
+                'Numero de usuarios',
+                'Numero de sesiones',
+                'Media total ACUs por usuario',
+                'Media total Coste por usuario',
+                'Media mes ACUs por usuario',
+                'Media mes Coste por usuario',
+                'Media Total ACUs por sesion',
+                'Media Total Coste por sesion'
+            ]
             
             for metric_name in target_metrics:
                 if metric_name in finops_metrics:

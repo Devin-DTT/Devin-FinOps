@@ -148,6 +148,23 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
         except (json.JSONDecodeError, AttributeError, TypeError) as e:
             logger.warning(f"Failed to extract metrics_sessions data: {e}")
     
+    members_endpoint = all_api_data.get('members', {})
+    if members_endpoint.get('status_code') == 200:
+        try:
+            members_response = members_endpoint.get('response', {})
+            if isinstance(members_response, str):
+                members_response = json.loads(members_response)
+            if isinstance(members_response, dict):
+                items = members_response.get('items', {})
+                if isinstance(items, dict):
+                    user_count = items.get('total', 0)
+                    base_data['user_count'] = {
+                        'value': user_count,
+                        'source': 'members.response.items.total'
+                    }
+        except (json.JSONDecodeError, AttributeError, TypeError) as e:
+            logger.warning(f"Failed to extract members data: {e}")
+    
     base_data['price_per_acu'] = {
         'value': config.price_per_acu,
         'source': 'config.price_per_acu'
@@ -185,6 +202,7 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
     prs_merged = get_value('prs_merged', 0)
     sessions_count = get_value('sessions_count', 0)
     unique_users = get_value('unique_users', 0)
+    user_count = get_value('user_count', 0)
     consumption_by_user = get_value('consumption_by_user', {})
     consumption_by_date = get_value('consumption_by_date', {})
     
@@ -287,6 +305,125 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
                 'sources_used': [
                     {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Numero de usuarios'] = {
+                'value': user_count,
+                'raw_data_value': user_count,
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': get_source('user_count'), 'raw_value': user_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Numero de sesiones'] = {
+                'value': sessions_count,
+                'raw_data_value': sessions_count,
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if user_count > 0:
+                media_total_acus_usuario = round(total_acus / user_count, 2)
+            else:
+                media_total_acus_usuario = 0.00
+            
+            all_metrics['Media total ACUs por usuario'] = {
+                'value': media_total_acus_usuario,
+                'raw_data_value': 'N/A',
+                'formula': f'Total ACUs / Numero de Usuarios',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('user_count'), 'raw_value': user_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if user_count > 0:
+                media_total_coste_usuario = round(total_cost_calculated / user_count, 2)
+            else:
+                media_total_coste_usuario = 0.00
+            
+            all_metrics['Media total Coste por usuario'] = {
+                'value': media_total_coste_usuario,
+                'raw_data_value': 'N/A',
+                'formula': f'Total Cost / Numero de Usuarios',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('user_count'), 'raw_value': user_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if user_count > 0:
+                media_mes_acus_usuario = round(current_month_acus / user_count, 2)
+            else:
+                media_mes_acus_usuario = 0.00
+            
+            all_metrics['Media mes ACUs por usuario'] = {
+                'value': media_mes_acus_usuario,
+                'raw_data_value': 'N/A',
+                'formula': f'ACUs Mes / Numero de Usuarios',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(current_month_acus, 2)},
+                    {'source_path': get_source('user_count'), 'raw_value': user_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if user_count > 0:
+                media_mes_coste_usuario = round(current_month_cost / user_count, 2)
+            else:
+                media_mes_coste_usuario = 0.00
+            
+            all_metrics['Media mes Coste por usuario'] = {
+                'value': media_mes_coste_usuario,
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Mes / Numero de Usuarios',
+                'sources_used': [
+                    {'source_path': 'Python Function (calculate_monthly_acus)', 'raw_value': round(current_month_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('user_count'), 'raw_value': user_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if sessions_count > 0:
+                media_total_acus_sesion = round(total_acus / sessions_count, 2)
+            else:
+                media_total_acus_sesion = 0.00
+            
+            all_metrics['Media Total ACUs por sesion'] = {
+                'value': media_total_acus_sesion,
+                'raw_data_value': 'N/A',
+                'formula': f'Total ACUs / Numero de Sesiones',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if sessions_count > 0:
+                media_total_coste_sesion = round(total_cost_calculated / sessions_count, 2)
+            else:
+                media_total_coste_sesion = 0.00
+            
+            all_metrics['Media Total Coste por sesion'] = {
+                'value': media_total_coste_sesion,
+                'raw_data_value': 'N/A',
+                'formula': f'Total Cost / Numero de Sesiones',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
                 ],
                 'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
