@@ -1162,7 +1162,7 @@ def main():
     
     from datetime import datetime, timedelta
     end_dt = datetime.strptime(args.end, '%Y-%m-%d')
-    start_for_trend = (end_dt - timedelta(days=365)).strftime('%Y-%m-%d')
+    start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
     
     params_by_endpoint = {
         'consumption_daily': {
