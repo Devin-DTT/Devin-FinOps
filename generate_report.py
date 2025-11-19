@@ -1161,16 +1161,81 @@ def main():
     user_breakdown_list = []
     
     from datetime import datetime, timedelta
-    end_dt = datetime.strptime(args.end, '%Y-%m-%d')
-    start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+    
+    logger.info("Step 1: Fetching consumption_cycles to determine dynamic date range...")
+    cycles_endpoint = {'consumption_cycles': API_ENDPOINTS['consumption_cycles']}
+    
+    try:
+        cycles_data = data_adapter.fetch_api_data(cycles_endpoint)
+        
+        if cycles_data and 'consumption_cycles' in cycles_data:
+            cycles_response = cycles_data['consumption_cycles']
+            
+            if cycles_response.get('status_code') == 200:
+                cycles_list = cycles_response.get('response', [])
+                
+                if isinstance(cycles_list, str):
+                    cycles_list = json.loads(cycles_list)
+                
+                if isinstance(cycles_list, list) and len(cycles_list) > 0:
+                    logger.info(f"Found {len(cycles_list)} consumption cycles")
+                    
+                    all_starts = []
+                    all_ends = []
+                    
+                    for cycle in cycles_list:
+                        if 'start' in cycle:
+                            start_dt = datetime.fromisoformat(cycle['start'].replace('Z', '+00:00'))
+                            all_starts.append(start_dt)
+                        if 'end' in cycle:
+                            end_dt = datetime.fromisoformat(cycle['end'].replace('Z', '+00:00'))
+                            all_ends.append(end_dt)
+                    
+                    if all_starts and all_ends:
+                        earliest_start = min(all_starts)
+                        latest_end = max(all_ends)
+                        
+                        start_for_trend = earliest_start.strftime('%Y-%m-%d')
+                        end_for_trend = latest_end.strftime('%Y-%m-%d')
+                        
+                        logger.info(f"Dynamic date range determined from consumption_cycles:")
+                        logger.info(f"  Earliest start: {start_for_trend}")
+                        logger.info(f"  Latest end: {end_for_trend}")
+                    else:
+                        logger.warning("No valid dates found in consumption_cycles, using fallback")
+                        end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+                        start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+                        end_for_trend = args.end
+                else:
+                    logger.warning("consumption_cycles returned empty list, using fallback date range")
+                    end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+                    start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+                    end_for_trend = args.end
+            else:
+                logger.warning(f"consumption_cycles returned status {cycles_response.get('status_code')}, using fallback")
+                end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+                start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+                end_for_trend = args.end
+        else:
+            logger.warning("Failed to fetch consumption_cycles, using fallback date range")
+            end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+            start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+            end_for_trend = args.end
+            
+    except Exception as e:
+        logger.error(f"Error fetching consumption_cycles: {e}")
+        logger.info("Using fallback date range")
+        end_dt = datetime.strptime(args.end, '%Y-%m-%d')
+        start_for_trend = (end_dt - timedelta(days=1825)).strftime('%Y-%m-%d')
+        end_for_trend = args.end
     
     params_by_endpoint = {
         'consumption_daily': {
             'start_date': start_for_trend,
-            'end_date': args.end
+            'end_date': end_for_trend
         }
     }
-    logger.info(f"Fetching consumption_daily with date range: {start_for_trend} to {args.end}")
+    logger.info(f"Step 2: Fetching consumption_daily with dynamic date range: {start_for_trend} to {end_for_trend}")
     
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS, params_by_endpoint=params_by_endpoint)
