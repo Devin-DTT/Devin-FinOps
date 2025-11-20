@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard FinOps - Análisis de Consumo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Dashboard FinOps Interactivo</h1>
+            <p class="text-gray-600">Análisis de Consumo de ACUs y Métricas Clave</p>
+        </div>
+
+        <!-- Sección de Métricas Clave -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Métricas Clave del Mes</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- ACUs Mes -->
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-1">ACUs Mes</div>
+                    <div id="acus-mes" class="text-3xl font-bold">-</div>
+                </div>
+
+                <!-- ACUs Mes Anterior -->
+                <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg p-4 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-1">ACUs Mes Anterior</div>
+                    <div id="acus-mes-anterior" class="text-3xl font-bold">-</div>
+                </div>
+
+                <!-- Coste Mes -->
+                <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-1">Coste Mes</div>
+                    <div id="coste-mes" class="text-3xl font-bold">-</div>
+                </div>
+
+                <!-- Coste Mes Anterior -->
+                <div class="bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg p-4 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-1">Coste Mes Anterior</div>
+                    <div id="coste-mes-anterior" class="text-3xl font-bold">-</div>
+                </div>
+
+                <!-- Diferencia de Coste -->
+                <div id="diferencia-card" class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-4 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-1">Diferencia de Coste</div>
+                    <div id="diferencia-coste" class="text-3xl font-bold">-</div>
+                    <div id="diferencia-indicator" class="text-xs mt-1 font-semibold">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Gráfico de Consumo -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Consumo Diario de ACUs</h2>
+            
+            <!-- Filtros de Período -->
+            <div class="mb-6 flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-2">
+                    <label for="month-filter" class="text-sm font-semibold text-gray-700">Filtro por Mes:</label>
+                    <select id="month-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Todos los meses</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-gray-700">Filtro por Días:</span>
+                    <button id="btn-60-days" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+                        Últimos 60 días
+                    </button>
+                    <button id="btn-90-days" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        Últimos 90 días
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chart Container -->
+            <div class="relative" style="height: 400px;">
+                <canvas id="consumption-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // MOCK DATA GENERATION
+        // ==========================================
+        
+        // Mock Metrics Data
+        const metrics = {
+            acusMes: 4850.75,
+            acusMesAnterior: 5200.50,
+            costeMes: 242.54,
+            costeMesAnterior: 260.03,
+            diferenciaCost: -17.49
+        };
+
+        // Generate Mock Daily Data (90+ days spanning September, October, November 2025)
+        const dailyConsumptionData = [];
+        const startDate = new Date('2025-09-01');
+        const endDate = new Date('2025-11-30');
+        
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            // Generate realistic ACU consumption (30-80 ACUs per day with some variation)
+            const baseACUs = 50;
+            const variation = Math.random() * 30 - 15; // -15 to +15
+            const acus = Math.max(30, baseACUs + variation);
+            const cost = acus * 0.05; // €0.05 per ACU
+            
+            dailyConsumptionData.push({
+                date: dateStr,
+                acus: parseFloat(acus.toFixed(2)),
+                cost: parseFloat(cost.toFixed(2))
+            });
+        }
+
+        // ==========================================
+        // CORE FUNCTIONS
+        // ==========================================
+
+        // Format currency in EUR
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('es-ES', {
+                style: 'currency',
+                currency: 'EUR'
+            }).format(value);
+        }
+
+        // Format number with thousand separators
+        function formatNumber(value) {
+            return new Intl.NumberFormat('es-ES', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }).format(value);
+        }
+
+        // Render Metrics Cards
+        function renderMetrics() {
+            document.getElementById('acus-mes').textContent = formatNumber(metrics.acusMes);
+            document.getElementById('acus-mes-anterior').textContent = formatNumber(metrics.acusMesAnterior);
+            document.getElementById('coste-mes').textContent = formatCurrency(metrics.costeMes);
+            document.getElementById('coste-mes-anterior').textContent = formatCurrency(metrics.costeMesAnterior);
+            document.getElementById('diferencia-coste').textContent = formatCurrency(metrics.diferenciaCost);
+            
+            // Update difference indicator with color
+            const diferenciaCard = document.getElementById('diferencia-card');
+            const diferenciaIndicator = document.getElementById('diferencia-indicator');
+            
+            if (metrics.diferenciaCost < 0) {
+                // Negative difference = savings (green)
+                diferenciaCard.className = 'bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white';
+                diferenciaIndicator.textContent = '↓ Ahorro';
+            } else if (metrics.diferenciaCost > 0) {
+                // Positive difference = increase (red)
+                diferenciaCard.className = 'bg-gradient-to-br from-red-500 to-red-600 rounded-lg p-4 text-white';
+                diferenciaIndicator.textContent = '↑ Incremento';
+            } else {
+                // No change (gray)
+                diferenciaCard.className = 'bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg p-4 text-white';
+                diferenciaIndicator.textContent = '= Sin cambio';
+            }
+        }
+
+        // Filter Data by type and value
+        function filterData(type, value) {
+            let filteredData = [...dailyConsumptionData];
+            
+            if (type === 'month' && value) {
+                // Filter by specific month (format: "2025-10" for October 2025)
+                filteredData = filteredData.filter(item => item.date.startsWith(value));
+            } else if (type === 'days' && value) {
+                // Filter by last N days
+                const today = new Date(dailyConsumptionData[dailyConsumptionData.length - 1].date);
+                const cutoffDate = new Date(today);
+                cutoffDate.setDate(cutoffDate.getDate() - value);
+                
+                filteredData = filteredData.filter(item => {
+                    const itemDate = new Date(item.date);
+                    return itemDate >= cutoffDate;
+                });
+            }
+            
+            return filteredData;
+        }
+
+        // Chart.js instance
+        let consumptionChart = null;
+
+        // Update Chart with filtered data
+        function updateChart(data) {
+            const labels = data.map(item => item.date);
+            const acusData = data.map(item => item.acus);
+            
+            const ctx = document.getElementById('consumption-chart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (consumptionChart) {
+                consumptionChart.destroy();
+            }
+            
+            // Create new chart
+            consumptionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'ACUs Consumidos',
+                        data: acusData,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 3,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'ACUs: ' + context.parsed.y.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Fecha'
+                            },
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45,
+                                autoSkip: true,
+                                maxTicksLimit: 20
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'ACUs'
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Populate month filter dropdown
+        function populateMonthFilter() {
+            const monthSelect = document.getElementById('month-filter');
+            const months = new Set();
+            
+            dailyConsumptionData.forEach(item => {
+                const yearMonth = item.date.substring(0, 7); // "2025-09"
+                months.add(yearMonth);
+            });
+            
+            // Convert to array and sort
+            const sortedMonths = Array.from(months).sort();
+            
+            // Create month name mapping
+            const monthNames = {
+                '01': 'Enero', '02': 'Febrero', '03': 'Marzo', '04': 'Abril',
+                '05': 'Mayo', '06': 'Junio', '07': 'Julio', '08': 'Agosto',
+                '09': 'Septiembre', '10': 'Octubre', '11': 'Noviembre', '12': 'Diciembre'
+            };
+            
+            sortedMonths.forEach(yearMonth => {
+                const [year, month] = yearMonth.split('-');
+                const monthName = monthNames[month];
+                const option = document.createElement('option');
+                option.value = yearMonth;
+                option.textContent = `${monthName} ${year}`;
+                monthSelect.appendChild(option);
+            });
+        }
+
+        // ==========================================
+        // EVENT LISTENERS
+        // ==========================================
+
+        document.getElementById('month-filter').addEventListener('change', function(e) {
+            const selectedMonth = e.target.value;
+            const filteredData = filterData('month', selectedMonth);
+            updateChart(filteredData);
+        });
+
+        document.getElementById('btn-60-days').addEventListener('click', function() {
+            const filteredData = filterData('days', 60);
+            updateChart(filteredData);
+            // Reset month filter
+            document.getElementById('month-filter').value = '';
+        });
+
+        document.getElementById('btn-90-days').addEventListener('click', function() {
+            const filteredData = filterData('days', 90);
+            updateChart(filteredData);
+            // Reset month filter
+            document.getElementById('month-filter').value = '';
+        });
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Render metrics cards
+            renderMetrics();
+            
+            // Populate month filter dropdown
+            populateMonthFilter();
+            
+            // Initialize chart with last 90 days (default view)
+            const defaultData = filterData('days', 90);
+            updateChart(defaultData);
+        });
+    </script>
+</body>
+</html>
