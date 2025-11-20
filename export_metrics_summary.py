@@ -202,6 +202,48 @@ def export_summary_to_excel(
         else:
             logger.warning("No consumption_by_user data available for 'Desglose Consumo Usuario' sheet")
         
+        consumption_by_org_id = {}
+        if all_api_data and isinstance(all_api_data, dict):
+            consumption_endpoint = all_api_data.get('consumption_daily', {})
+            if consumption_endpoint.get('status_code') == 200:
+                try:
+                    response_data = consumption_endpoint.get('response', {})
+                    if isinstance(response_data, str):
+                        response_data = json.loads(response_data)
+                    if isinstance(response_data, dict):
+                        consumption_by_org_id = response_data.get('consumption_by_org_id', {})
+                except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to extract consumption_by_org_id for new sheet: {e}")
+        
+        if consumption_by_org_id:
+            ws_org = wb.create_sheet(title="Desglose Consumo Organizacion")
+            
+            ws_org.column_dimensions['A'].width = 40
+            ws_org.column_dimensions['B'].width = 20
+            
+            ws_org['A1'] = "Organization ID"
+            ws_org['B1'] = "Consumo (ACUs)"
+            
+            ws_org['A1'].font = header_font
+            ws_org['A1'].fill = header_fill
+            ws_org['A1'].alignment = header_alignment
+            
+            ws_org['B1'].font = header_font
+            ws_org['B1'].fill = header_fill
+            ws_org['B1'].alignment = header_alignment
+            
+            row = 2
+            for org_id, acus in consumption_by_org_id.items():
+                ws_org[f'A{row}'] = org_id
+                ws_org[f'B{row}'] = round(acus, 2)
+                ws_org[f'B{row}'].number_format = '0.00'
+                ws_org[f'B{row}'].alignment = Alignment(horizontal="right")
+                row += 1
+            
+            logger.info(f"Created 'Desglose Consumo Organizacion' sheet with {len(consumption_by_org_id)} organizations")
+        else:
+            logger.warning("No consumption_by_org_id data available for 'Desglose Consumo Organizacion' sheet")
+        
         wb.save(output_filename)
         
         logger.info(f"Successfully exported summary to {output_filename}")
