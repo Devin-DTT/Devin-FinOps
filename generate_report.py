@@ -1796,7 +1796,28 @@ def main():
     
     export_daily_acus_to_csv()
     
-    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary, finops_metrics=finops_metrics)
+    monthly_consumption_history = []
+    consumption_by_date = base_data.get('consumption_by_date', {}).get('value', {})
+    if consumption_by_date:
+        logger.info("Preparing monthly consumption history...")
+        unique_months = set()
+        for date_str in consumption_by_date.keys():
+            if len(date_str) >= 7:
+                month_prefix = date_str[:7]
+                unique_months.add(month_prefix)
+        
+        for month_prefix in sorted(unique_months):
+            monthly_acus = calculate_monthly_acus(consumption_by_date, month_prefix)
+            monthly_consumption_history.append({
+                'Mes': month_prefix,
+                'Consumo Total (ACUs)': round(monthly_acus, 2)
+            })
+        
+        logger.info(f"Prepared monthly consumption history with {len(monthly_consumption_history)} months")
+    else:
+        logger.warning("No consumption_by_date data available for monthly history")
+    
+    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary, finops_metrics=finops_metrics, monthly_consumption_history=monthly_consumption_history)
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)

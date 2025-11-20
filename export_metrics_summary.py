@@ -21,7 +21,8 @@ def export_summary_to_excel(
     summary_data: Dict[str, Any] = None,
     user_breakdown_list: list = None,
     org_breakdown_summary: dict = None,
-    finops_metrics: Dict[str, Dict[str, Any]] = None
+    finops_metrics: Dict[str, Dict[str, Any]] = None,
+    monthly_consumption_history: list = None
 ) -> None:
     """
     Export FinOps business summary data to Excel format with modular structure.
@@ -243,6 +244,37 @@ def export_summary_to_excel(
             logger.info(f"Created 'Desglose Consumo Organizacion' sheet with {len(consumption_by_org_id)} organizations")
         else:
             logger.warning("No consumption_by_org_id data available for 'Desglose Consumo Organizacion' sheet")
+        
+        if monthly_consumption_history:
+            ws_monthly = wb.create_sheet(title="Historico Consumo Mensual")
+            
+            ws_monthly.column_dimensions['A'].width = 20
+            ws_monthly.column_dimensions['B'].width = 25
+            
+            ws_monthly['A1'] = "Mes"
+            ws_monthly['B1'] = "Consumo Total (ACUs)"
+            
+            ws_monthly['A1'].font = header_font
+            ws_monthly['A1'].fill = header_fill
+            ws_monthly['A1'].alignment = header_alignment
+            
+            ws_monthly['B1'].font = header_font
+            ws_monthly['B1'].fill = header_fill
+            ws_monthly['B1'].alignment = header_alignment
+            
+            row = 2
+            for month_data in monthly_consumption_history:
+                mes = month_data.get('Mes', '')
+                acus = month_data.get('Consumo Total (ACUs)', 0)
+                ws_monthly[f'A{row}'] = mes
+                ws_monthly[f'B{row}'] = acus
+                ws_monthly[f'B{row}'].number_format = '0.00'
+                ws_monthly[f'B{row}'].alignment = Alignment(horizontal="right")
+                row += 1
+            
+            logger.info(f"Created 'Historico Consumo Mensual' sheet with {len(monthly_consumption_history)} months")
+        else:
+            logger.warning("No monthly_consumption_history data available for 'Historico Consumo Mensual' sheet")
         
         wb.save(output_filename)
         
