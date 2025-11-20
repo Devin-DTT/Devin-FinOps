@@ -98,6 +98,7 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
                 total_acus = response_data.get('total_acus', 0)
                 consumption_by_date = response_data.get('consumption_by_date', {})
                 consumption_by_user = response_data.get('consumption_by_user', {})
+                consumption_by_org_id = response_data.get('consumption_by_org_id', {})
                 
                 base_data['total_acus'] = {
                     'value': total_acus,
@@ -111,9 +112,17 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
                     'value': consumption_by_user,
                     'source': 'consumption_daily.response.consumption_by_user'
                 }
+                base_data['consumption_by_org_id'] = {
+                    'value': consumption_by_org_id,
+                    'source': 'consumption_daily.response.consumption_by_org_id'
+                }
                 base_data['unique_users'] = {
                     'value': len(consumption_by_user),
                     'source': 'consumption_daily.response.consumption_by_user (count)'
+                }
+                base_data['num_organizations'] = {
+                    'value': len(consumption_by_org_id),
+                    'source': 'consumption_daily.response.consumption_by_org_id (count keys)'
                 }
         except (json.JSONDecodeError, AttributeError, TypeError) as e:
             logger.warning(f"Failed to extract consumption_daily metrics: {e}")
@@ -125,7 +134,18 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
             if isinstance(prs_response, str):
                 prs_response = json.loads(prs_response)
             if isinstance(prs_response, dict):
+                prs_opened = prs_response.get('prs_opened', 0)
+                prs_closed = prs_response.get('prs_closed', 0)
                 prs_merged = prs_response.get('prs_merged', 0)
+                
+                base_data['prs_opened'] = {
+                    'value': prs_opened,
+                    'source': 'metrics_prs.response.prs_opened'
+                }
+                base_data['prs_closed'] = {
+                    'value': prs_closed,
+                    'source': 'metrics_prs.response.prs_closed'
+                }
                 base_data['prs_merged'] = {
                     'value': prs_merged,
                     'source': 'metrics_prs.response.prs_merged'
@@ -422,6 +442,212 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
                     {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
                     {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
                     {'source_path': get_source('sessions_count'), 'raw_value': sessions_count}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            num_organizations = get_value('num_organizations', 0)
+            all_metrics['Numero de organizaciones'] = {
+                'value': num_organizations,
+                'raw_data_value': num_organizations,
+                'formula': 'Count keys in consumption_by_org_id dictionary',
+                'sources_used': [
+                    {'source_path': get_source('num_organizations'), 'raw_value': num_organizations}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if num_organizations > 0:
+                coste_por_organizacion = round(total_cost_calculated / num_organizations, 2)
+            else:
+                coste_por_organizacion = 0.00
+            
+            all_metrics['Coste por organizacion'] = {
+                'value': coste_por_organizacion,
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Total / Numero de Organizaciones',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('num_organizations'), 'raw_value': num_organizations}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if num_organizations > 0:
+                coste_por_grupo = round(total_cost_calculated / num_organizations, 2)
+            else:
+                coste_por_grupo = 0.00
+            
+            all_metrics['Coste por grupo (IdP)'] = {
+                'value': coste_por_grupo,
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Total / Numero de Organizaciones',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('num_organizations'), 'raw_value': num_organizations}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            prs_opened = get_value('prs_opened', 0)
+            prs_closed = get_value('prs_closed', 0)
+            prs_merged = get_value('prs_merged', 0)
+            prs_totales = prs_opened + prs_closed + prs_merged
+            
+            all_metrics['Numero de PRs abiertos'] = {
+                'value': prs_opened,
+                'raw_data_value': prs_opened,
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': get_source('prs_opened'), 'raw_value': prs_opened}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Numero de PRs cerradas'] = {
+                'value': prs_closed,
+                'raw_data_value': prs_closed,
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': get_source('prs_closed'), 'raw_value': prs_closed}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Numero de PRs mergeadas'] = {
+                'value': prs_merged,
+                'raw_data_value': prs_merged,
+                'formula': 'Direct extraction from JSON',
+                'sources_used': [
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Numero de PRs totales'] = {
+                'value': prs_totales,
+                'raw_data_value': 'N/A',
+                'formula': 'Sum of PRs abiertos + PRs cerradas + PRs mergeadas',
+                'sources_used': [
+                    {'source_path': get_source('prs_opened'), 'raw_value': prs_opened},
+                    {'source_path': get_source('prs_closed'), 'raw_value': prs_closed},
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if prs_totales > 0:
+                acus_por_pr_totales = round(total_acus / prs_totales, 2)
+            else:
+                acus_por_pr_totales = 0.00
+            
+            all_metrics['ACUs por PR totales'] = {
+                'value': acus_por_pr_totales,
+                'raw_data_value': 'N/A',
+                'formula': f'Total ACUs / PRs totales',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': 'Calculated (prs_opened + prs_closed + prs_merged)', 'raw_value': prs_totales}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if prs_totales > 0:
+                coste_por_pr_totales = round(total_cost_calculated / prs_totales, 2)
+            else:
+                coste_por_pr_totales = 0.00
+            
+            all_metrics['Coste por PR totales'] = {
+                'value': coste_por_pr_totales,
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Total / PRs totales',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': 'Calculated (prs_opened + prs_closed + prs_merged)', 'raw_value': prs_totales}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if prs_merged > 0:
+                acus_medio_por_pr_mergeado = round(total_acus / prs_merged, 2)
+            else:
+                acus_medio_por_pr_mergeado = 0.00
+            
+            all_metrics['ACUs medio por PR mergeado'] = {
+                'value': acus_medio_por_pr_mergeado,
+                'raw_data_value': 'N/A',
+                'formula': f'Total ACUs / PRs mergeadas',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if prs_merged > 0:
+                coste_medio_por_pr_mergeado = round(total_cost_calculated / prs_merged, 2)
+            else:
+                coste_medio_por_pr_mergeado = 0.00
+            
+            all_metrics['Coste medio por PR mergeado'] = {
+                'value': coste_medio_por_pr_mergeado,
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Total / PRs mergeadas',
+                'sources_used': [
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)},
+                    {'source_path': get_source('price_per_acu'), 'raw_value': price_per_acu},
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if total_acus > 0:
+                promedio_prs_por_acu = round(prs_totales / total_acus, 2)
+            else:
+                promedio_prs_por_acu = 0.00
+            
+            all_metrics['Promedio de PRs por ACU'] = {
+                'value': promedio_prs_por_acu,
+                'raw_data_value': 'N/A',
+                'formula': f'PRs totales / Total ACUs',
+                'sources_used': [
+                    {'source_path': 'Calculated (prs_opened + prs_closed + prs_merged)', 'raw_value': prs_totales},
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if total_acus > 0:
+                promedio_prs_mergeados_por_acu = round(prs_merged / total_acus, 2)
+            else:
+                promedio_prs_mergeados_por_acu = 0.00
+            
+            all_metrics['Promedio de PRs mergeados por ACU'] = {
+                'value': promedio_prs_mergeados_por_acu,
+                'raw_data_value': 'N/A',
+                'formula': f'PRs mergeadas / Total ACUs',
+                'sources_used': [
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged},
+                    {'source_path': 'consumption_daily.response.total_acus', 'raw_value': round(total_acus, 2)}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            if prs_totales > 0:
+                tasa_exito_pr = round((prs_merged / prs_totales) * 100, 2)
+            else:
+                tasa_exito_pr = 0.00
+            
+            all_metrics['Tasa de exito de PR'] = {
+                'value': tasa_exito_pr,
+                'raw_data_value': 'N/A',
+                'formula': f'(PRs mergeadas / PRs totales) * 100',
+                'sources_used': [
+                    {'source_path': get_source('prs_merged'), 'raw_value': prs_merged},
+                    {'source_path': 'Calculated (prs_opened + prs_closed + prs_merged)', 'raw_value': prs_totales}
                 ],
                 'category': 'COST VISIBILITY AND TRANSPARENCY'
             }

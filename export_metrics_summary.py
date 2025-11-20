@@ -90,7 +90,21 @@ def export_summary_to_excel(
                 'Media mes ACUs por usuario',
                 'Media mes Coste por usuario',
                 'Media Total ACUs por sesion',
-                'Media Total Coste por sesion'
+                'Media Total Coste por sesion',
+                'Numero de organizaciones',
+                'Coste por organizacion',
+                'Coste por grupo (IdP)',
+                'Numero de PRs abiertos',
+                'Numero de PRs cerradas',
+                'Numero de PRs mergeadas',
+                'Numero de PRs totales',
+                'ACUs por PR totales',
+                'Coste por PR totales',
+                'ACUs medio por PR mergeado',
+                'Coste medio por PR mergeado',
+                'Promedio de PRs por ACU',
+                'Promedio de PRs mergeados por ACU',
+                'Tasa de exito de PR'
             ]
             
             for metric_name in target_metrics:
@@ -142,9 +156,51 @@ def export_summary_to_excel(
                     
                     row += 1
             
-            logger.info(f"Added 'Visibilidad y transparencia de costes' section with 4 metrics")
+            logger.info(f"Added 'Visibilidad y transparencia de costes' section with metrics")
         else:
             logger.warning("No finops_metrics provided, cannot populate Excel report")
+        
+        consumption_by_user = {}
+        if all_api_data and isinstance(all_api_data, dict):
+            consumption_endpoint = all_api_data.get('consumption_daily', {})
+            if consumption_endpoint.get('status_code') == 200:
+                try:
+                    response_data = consumption_endpoint.get('response', {})
+                    if isinstance(response_data, str):
+                        response_data = json.loads(response_data)
+                    if isinstance(response_data, dict):
+                        consumption_by_user = response_data.get('consumption_by_user', {})
+                except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                    logger.warning(f"Failed to extract consumption_by_user for new sheet: {e}")
+        
+        if consumption_by_user:
+            ws_user = wb.create_sheet(title="Desglose Consumo Usuario")
+            
+            ws_user.column_dimensions['A'].width = 40
+            ws_user.column_dimensions['B'].width = 20
+            
+            ws_user['A1'] = "User ID"
+            ws_user['B1'] = "Consumo (ACUs)"
+            
+            ws_user['A1'].font = header_font
+            ws_user['A1'].fill = header_fill
+            ws_user['A1'].alignment = header_alignment
+            
+            ws_user['B1'].font = header_font
+            ws_user['B1'].fill = header_fill
+            ws_user['B1'].alignment = header_alignment
+            
+            row = 2
+            for user_id, acus in consumption_by_user.items():
+                ws_user[f'A{row}'] = user_id
+                ws_user[f'B{row}'] = round(acus, 2)
+                ws_user[f'B{row}'].number_format = '0.00'
+                ws_user[f'B{row}'].alignment = Alignment(horizontal="right")
+                row += 1
+            
+            logger.info(f"Created 'Desglose Consumo Usuario' sheet with {len(consumption_by_user)} users")
+        else:
+            logger.warning("No consumption_by_user data available for 'Desglose Consumo Usuario' sheet")
         
         wb.save(output_filename)
         
