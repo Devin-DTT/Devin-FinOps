@@ -305,6 +305,28 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
                 'category': 'COST VISIBILITY AND TRANSPARENCY'
             }
             
+            all_metrics['Diferencia (Mes Actual - Mes Anterior)'] = {
+                'value': round(absolute_difference, 2),
+                'raw_data_value': 'N/A',
+                'formula': f'Coste Mes - Coste Mes Anterior',
+                'sources_used': [
+                    {'source_path': 'Calculated from Coste Mes', 'raw_value': current_month_cost},
+                    {'source_path': 'Calculated from Coste Mes Anterior', 'raw_value': prev_month_cost}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
+            all_metrics['Variacion Porcentual'] = {
+                'value': percentage_value,
+                'raw_data_value': 'N/A',
+                'formula': percentage_formula,
+                'sources_used': [
+                    {'source_path': 'Calculated from Coste Mes', 'raw_value': current_month_cost},
+                    {'source_path': 'Calculated from Coste Mes Anterior', 'raw_value': prev_month_cost}
+                ],
+                'category': 'COST VISIBILITY AND TRANSPARENCY'
+            }
+            
             all_metrics['ACUs consumidos totales'] = {
                 'value': round(total_acus, 2),
                 'raw_data_value': round(total_acus, 2),
