@@ -21,39 +21,37 @@
             <p class="text-gray-600">Análisis de Consumo de ACUs y Métricas Clave</p>
         </div>
 
-        <!-- Sección de Métricas Clave -->
+        <!-- Sección de Métricas Ejecutivas -->
         <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Métricas Clave del Mes</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <!-- ACUs Mes -->
-                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-4 text-white">
-                    <div class="text-sm font-semibold opacity-90 mb-1">ACUs Mes</div>
-                    <div id="acus-mes" class="text-3xl font-bold">-</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Métricas Ejecutivas - Comparativa Mensual</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- ACUs (Consumo) -->
+                <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-2">ACUs (Consumo)</div>
+                    <div id="acus-mes" class="text-4xl font-bold mb-3">-</div>
+                    <div class="border-t border-white border-opacity-30 pt-3">
+                        <div id="acus-variacion" class="text-lg font-semibold mb-1">-</div>
+                        <div id="acus-porcentaje" class="text-sm opacity-90">-</div>
+                    </div>
                 </div>
 
-                <!-- ACUs Mes Anterior -->
-                <div class="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-lg p-4 text-white">
-                    <div class="text-sm font-semibold opacity-90 mb-1">ACUs Mes Anterior</div>
-                    <div id="acus-mes-anterior" class="text-3xl font-bold">-</div>
+                <!-- Coste Total (€) -->
+                <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-2">Coste Total (€)</div>
+                    <div id="coste-mes" class="text-4xl font-bold mb-3">-</div>
+                    <div class="border-t border-white border-opacity-30 pt-3">
+                        <div id="coste-variacion" class="text-lg font-semibold mb-1">-</div>
+                        <div id="coste-porcentaje" class="text-sm opacity-90">-</div>
+                    </div>
                 </div>
 
-                <!-- Coste Mes -->
-                <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white">
-                    <div class="text-sm font-semibold opacity-90 mb-1">Coste Mes</div>
-                    <div id="coste-mes" class="text-3xl font-bold">-</div>
-                </div>
-
-                <!-- Coste Mes Anterior -->
-                <div class="bg-gradient-to-br from-teal-500 to-teal-600 rounded-lg p-4 text-white">
-                    <div class="text-sm font-semibold opacity-90 mb-1">Coste Mes Anterior</div>
-                    <div id="coste-mes-anterior" class="text-3xl font-bold">-</div>
-                </div>
-
-                <!-- Diferencia de Coste -->
-                <div id="diferencia-card" class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-4 text-white">
-                    <div class="text-sm font-semibold opacity-90 mb-1">Diferencia de Coste</div>
-                    <div id="diferencia-coste" class="text-3xl font-bold">-</div>
-                    <div id="diferencia-indicator" class="text-xs mt-1 font-semibold">-</div>
+                <!-- Variación Absoluta de Coste (€) -->
+                <div id="diferencia-card" class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                    <div class="text-sm font-semibold opacity-90 mb-2">Variación Absoluta de Coste (€)</div>
+                    <div id="diferencia-coste" class="text-4xl font-bold mb-3">-</div>
+                    <div class="border-t border-white border-opacity-30 pt-3">
+                        <div id="diferencia-indicator" class="text-lg font-semibold">-</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -80,6 +78,20 @@
                         Últimos 90 días
                     </button>
                 </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="user-filter" class="text-sm font-semibold text-gray-700">Filtro por Usuario:</label>
+                    <select id="user-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Todos los usuarios</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="org-filter" class="text-sm font-semibold text-gray-700">Filtro por Organización:</label>
+                    <select id="org-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Todas las organizaciones</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Chart Container -->
@@ -94,14 +106,9 @@
         // MOCK DATA GENERATION
         // ==========================================
         
-        // Mock Metrics Data
-        const metrics = {
-            acusMes: 4850.75,
-            acusMesAnterior: 5200.50,
-            costeMes: 242.54,
-            costeMesAnterior: 260.03,
-            diferenciaCost: -17.49
-        };
+        // Define users and organizations for simulation
+        const users = ['user-a', 'user-b', 'user-c', 'user-d', 'user-e'];
+        const organizations = ['org-alpha', 'org-beta', 'org-gamma'];
 
         // Generate Mock Daily Data (90+ days spanning September, October, November 2025)
         const dailyConsumptionData = [];
@@ -116,12 +123,30 @@
             const acus = Math.max(30, baseACUs + variation);
             const cost = acus * 0.05; // €0.05 per ACU
             
+            // Randomly assign user and organization
+            const userId = users[Math.floor(Math.random() * users.length)];
+            const organizationId = organizations[Math.floor(Math.random() * organizations.length)];
+            
             dailyConsumptionData.push({
                 date: dateStr,
                 acus: parseFloat(acus.toFixed(2)),
-                cost: parseFloat(cost.toFixed(2))
+                cost: parseFloat(cost.toFixed(2)),
+                userId: userId,
+                organizationId: organizationId
             });
         }
+
+        // ==========================================
+        // GLOBAL STATE
+        // ==========================================
+        
+        // Current filters state
+        const currentFilters = {
+            days: null,
+            month: null,
+            user: null,
+            organization: null
+        };
 
         // ==========================================
         // CORE FUNCTIONS
@@ -143,50 +168,119 @@
             }).format(value);
         }
 
-        // Render Metrics Cards
+        // Calculate metrics dynamically from daily data
+        function calculateMetricsFromData() {
+            const today = new Date();
+            const currentMonth = today.getMonth(); // 0-11
+            const currentYear = today.getFullYear();
+            
+            // Calculate current month metrics
+            const currentMonthData = dailyConsumptionData.filter(item => {
+                const itemDate = new Date(item.date);
+                return itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear;
+            });
+            
+            const acusMes = currentMonthData.reduce((sum, item) => sum + item.acus, 0);
+            const costeMes = currentMonthData.reduce((sum, item) => sum + item.cost, 0);
+            
+            // Calculate previous month metrics
+            const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            
+            const prevMonthData = dailyConsumptionData.filter(item => {
+                const itemDate = new Date(item.date);
+                return itemDate.getMonth() === prevMonth && itemDate.getFullYear() === prevYear;
+            });
+            
+            const acusMesAnterior = prevMonthData.reduce((sum, item) => sum + item.acus, 0);
+            const costeMesAnterior = prevMonthData.reduce((sum, item) => sum + item.cost, 0);
+            
+            // Calculate differences
+            const diferenciaACUs = acusMes - acusMesAnterior;
+            const diferenciaCost = costeMes - costeMesAnterior;
+            const porcentajeACUs = acusMesAnterior !== 0 ? ((diferenciaACUs / acusMesAnterior) * 100) : 0;
+            const porcentajeCost = costeMesAnterior !== 0 ? ((diferenciaCost / costeMesAnterior) * 100) : 0;
+            
+            return {
+                acusMes,
+                acusMesAnterior,
+                costeMes,
+                costeMesAnterior,
+                diferenciaACUs,
+                diferenciaCost,
+                porcentajeACUs,
+                porcentajeCost
+            };
+        }
+
+        // Render Executive Metrics Cards
         function renderMetrics() {
+            const metrics = calculateMetricsFromData();
+            
+            // ACUs Mes
             document.getElementById('acus-mes').textContent = formatNumber(metrics.acusMes);
-            document.getElementById('acus-mes-anterior').textContent = formatNumber(metrics.acusMesAnterior);
+            document.getElementById('acus-variacion').textContent = 
+                (metrics.diferenciaACUs >= 0 ? '+' : '') + formatNumber(metrics.diferenciaACUs) + ' ACUs';
+            document.getElementById('acus-porcentaje').textContent = 
+                (metrics.porcentajeACUs >= 0 ? '+' : '') + metrics.porcentajeACUs.toFixed(2) + '%';
+            
+            // Coste Mes
             document.getElementById('coste-mes').textContent = formatCurrency(metrics.costeMes);
-            document.getElementById('coste-mes-anterior').textContent = formatCurrency(metrics.costeMesAnterior);
+            document.getElementById('coste-variacion').textContent = 
+                (metrics.diferenciaCost >= 0 ? '+' : '') + formatCurrency(metrics.diferenciaCost);
+            document.getElementById('coste-porcentaje').textContent = 
+                (metrics.porcentajeCost >= 0 ? '+' : '') + metrics.porcentajeCost.toFixed(2) + '%';
+            
+            // Diferencia de Coste with color coding
             document.getElementById('diferencia-coste').textContent = formatCurrency(metrics.diferenciaCost);
             
-            // Update difference indicator with color
             const diferenciaCard = document.getElementById('diferencia-card');
             const diferenciaIndicator = document.getElementById('diferencia-indicator');
             
             if (metrics.diferenciaCost < 0) {
                 // Negative difference = savings (green)
-                diferenciaCard.className = 'bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white';
+                diferenciaCard.className = 'bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white';
                 diferenciaIndicator.textContent = '↓ Ahorro';
             } else if (metrics.diferenciaCost > 0) {
                 // Positive difference = increase (red)
-                diferenciaCard.className = 'bg-gradient-to-br from-red-500 to-red-600 rounded-lg p-4 text-white';
+                diferenciaCard.className = 'bg-gradient-to-br from-red-500 to-red-600 rounded-lg p-6 text-white';
                 diferenciaIndicator.textContent = '↑ Incremento';
             } else {
                 // No change (gray)
-                diferenciaCard.className = 'bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg p-4 text-white';
+                diferenciaCard.className = 'bg-gradient-to-br from-gray-500 to-gray-600 rounded-lg p-6 text-white';
                 diferenciaIndicator.textContent = '= Sin cambio';
             }
         }
 
-        // Filter Data by type and value
-        function filterData(type, value) {
+        // Filter Data applying all active filters
+        function filterData() {
             let filteredData = [...dailyConsumptionData];
             
-            if (type === 'month' && value) {
-                // Filter by specific month (format: "2025-10" for October 2025)
-                filteredData = filteredData.filter(item => item.date.startsWith(value));
-            } else if (type === 'days' && value) {
-                // Filter by last N days
+            // Apply month filter
+            if (currentFilters.month) {
+                filteredData = filteredData.filter(item => item.date.startsWith(currentFilters.month));
+            }
+            
+            // Apply days filter
+            if (currentFilters.days) {
                 const today = new Date(dailyConsumptionData[dailyConsumptionData.length - 1].date);
                 const cutoffDate = new Date(today);
-                cutoffDate.setDate(cutoffDate.getDate() - value);
+                cutoffDate.setDate(cutoffDate.getDate() - currentFilters.days);
                 
                 filteredData = filteredData.filter(item => {
                     const itemDate = new Date(item.date);
                     return itemDate >= cutoffDate;
                 });
+            }
+            
+            // Apply user filter
+            if (currentFilters.user) {
+                filteredData = filteredData.filter(item => item.userId === currentFilters.user);
+            }
+            
+            // Apply organization filter
+            if (currentFilters.organization) {
+                filteredData = filteredData.filter(item => item.organizationId === currentFilters.organization);
             }
             
             return filteredData;
@@ -299,28 +393,82 @@
             });
         }
 
+        // Populate user filter dropdown
+        function populateUserFilter() {
+            const userSelect = document.getElementById('user-filter');
+            const uniqueUsers = new Set();
+            
+            dailyConsumptionData.forEach(item => {
+                uniqueUsers.add(item.userId);
+            });
+            
+            // Convert to array and sort
+            const sortedUsers = Array.from(uniqueUsers).sort();
+            
+            sortedUsers.forEach(userId => {
+                const option = document.createElement('option');
+                option.value = userId;
+                option.textContent = userId;
+                userSelect.appendChild(option);
+            });
+        }
+
+        // Populate organization filter dropdown
+        function populateOrgFilter() {
+            const orgSelect = document.getElementById('org-filter');
+            const uniqueOrgs = new Set();
+            
+            dailyConsumptionData.forEach(item => {
+                uniqueOrgs.add(item.organizationId);
+            });
+            
+            // Convert to array and sort
+            const sortedOrgs = Array.from(uniqueOrgs).sort();
+            
+            sortedOrgs.forEach(orgId => {
+                const option = document.createElement('option');
+                option.value = orgId;
+                option.textContent = orgId;
+                orgSelect.appendChild(option);
+            });
+        }
+
         // ==========================================
         // EVENT LISTENERS
         // ==========================================
 
         document.getElementById('month-filter').addEventListener('change', function(e) {
-            const selectedMonth = e.target.value;
-            const filteredData = filterData('month', selectedMonth);
+            currentFilters.month = e.target.value || null;
+            const filteredData = filterData();
             updateChart(filteredData);
         });
 
         document.getElementById('btn-60-days').addEventListener('click', function() {
-            const filteredData = filterData('days', 60);
-            updateChart(filteredData);
-            // Reset month filter
+            currentFilters.days = 60;
+            currentFilters.month = null;
             document.getElementById('month-filter').value = '';
+            const filteredData = filterData();
+            updateChart(filteredData);
         });
 
         document.getElementById('btn-90-days').addEventListener('click', function() {
-            const filteredData = filterData('days', 90);
-            updateChart(filteredData);
-            // Reset month filter
+            currentFilters.days = 90;
+            currentFilters.month = null;
             document.getElementById('month-filter').value = '';
+            const filteredData = filterData();
+            updateChart(filteredData);
+        });
+
+        document.getElementById('user-filter').addEventListener('change', function(e) {
+            currentFilters.user = e.target.value || null;
+            const filteredData = filterData();
+            updateChart(filteredData);
+        });
+
+        document.getElementById('org-filter').addEventListener('change', function(e) {
+            currentFilters.organization = e.target.value || null;
+            const filteredData = filterData();
+            updateChart(filteredData);
         });
 
         // ==========================================
@@ -331,11 +479,14 @@
             // Render metrics cards
             renderMetrics();
             
-            // Populate month filter dropdown
+            // Populate all filter dropdowns
             populateMonthFilter();
+            populateUserFilter();
+            populateOrgFilter();
             
             // Initialize chart with last 90 days (default view)
-            const defaultData = filterData('days', 90);
+            currentFilters.days = 90;
+            const defaultData = filterData();
             updateChart(defaultData);
         });
     </script>
