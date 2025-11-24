@@ -23,8 +23,8 @@
                     <p class="text-gray-600">Métricas Cognition</p>
                 </div>
                 <div class="flex gap-3 items-center">
-                    <img src="https://placehold.co/40x40/0A386D/FFFFFF?text=CG" alt="Cognition Logo" class="rounded">
-                    <img src="https://placehold.co/40x40/86BC24/FFFFFF?text=D" alt="Deloitte Logo" class="rounded">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/2/22/Cognition_AI.png" alt="Cognition Logo" class="rounded" style="height: 40px;">
+                    <img src="https://www.e-spincorp.com/wp-content/uploads/2018/07/logo-deloitte-espincorp.png" alt="Deloitte Logo" class="rounded" style="height: 40px;">
                 </div>
             </div>
         </div>
@@ -35,9 +35,10 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- ACUs (Consumo) -->
                 <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                    <div class="text-sm font-semibold text-gray-600 mb-2">ACUs (Consumo)</div>
+                    <div id="acus-title" class="text-sm font-semibold text-gray-600 mb-2">Consumo de ACUs Mes</div>
                     <div id="acus-mes" class="text-4xl font-bold text-gray-800 mb-3">-</div>
                     <div class="border-t border-gray-200 pt-3">
+                        <div id="acus-subtitle" class="text-xs font-semibold text-gray-500 mb-2">vs. Mes Anterior</div>
                         <div id="acus-variacion" class="text-lg font-semibold text-gray-700 mb-1">-</div>
                         <div id="acus-porcentaje" class="text-sm text-gray-600">-</div>
                     </div>
@@ -45,9 +46,10 @@
 
                 <!-- Coste Total (€) -->
                 <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                    <div class="text-sm font-semibold text-gray-600 mb-2">Coste Total (€)</div>
+                    <div id="coste-title" class="text-sm font-semibold text-gray-600 mb-2">Coste Total Mes</div>
                     <div id="coste-mes" class="text-4xl font-bold text-gray-800 mb-3">-</div>
                     <div class="border-t border-gray-200 pt-3">
+                        <div id="coste-subtitle" class="text-xs font-semibold text-gray-500 mb-2">vs. Mes Anterior</div>
                         <div id="coste-variacion" class="text-lg font-semibold text-gray-700 mb-1">-</div>
                         <div id="coste-porcentaje" class="text-sm text-gray-600">-</div>
                     </div>
@@ -66,7 +68,17 @@
 
         <!-- Sección de Gráfico de Consumo -->
         <div class="bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Consumo Diario de ACUs</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Consumo de ACUs</h2>
+                <div class="flex gap-2">
+                    <button id="btn-view-daily" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                        Diario
+                    </button>
+                    <button id="btn-view-weekly" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
+                        Semanal
+                    </button>
+                </div>
+            </div>
             
             <!-- Filtros de Período -->
             <div class="mb-6 flex flex-wrap gap-4 items-center">
@@ -153,7 +165,8 @@
             days: null,
             month: null,
             user: null,
-            organization: null
+            organization: null,
+            viewType: 'daily' // 'daily' or 'weekly'
         };
 
         // ==========================================
@@ -221,9 +234,38 @@
             };
         }
 
+        // Get Spanish month name
+        function getSpanishMonthName(monthIndex) {
+            const monthNames = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            return monthNames[monthIndex];
+        }
+
         // Render Executive Metrics Cards
         function renderMetrics() {
             const metrics = calculateMetricsFromData();
+            const today = new Date();
+            const currentMonth = today.getMonth();
+            const currentYear = today.getFullYear();
+            const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+            const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            
+            const currentMonthName = getSpanishMonthName(currentMonth);
+            const prevMonthName = getSpanishMonthName(prevMonth);
+            
+            // Update ACUs card titles
+            document.getElementById('acus-title').textContent = 
+                `Consumo de ACUs Mes (${currentMonthName} ${currentYear})`;
+            document.getElementById('acus-subtitle').textContent = 
+                `vs. Mes Anterior (${prevMonthName} ${prevYear})`;
+            
+            // Update Coste card titles
+            document.getElementById('coste-title').textContent = 
+                `Coste Total Mes (${currentMonthName} ${currentYear})`;
+            document.getElementById('coste-subtitle').textContent = 
+                `vs. Mes Anterior (${prevMonthName} ${prevYear})`;
             
             // ACUs Mes
             document.getElementById('acus-mes').textContent = formatNumber(metrics.acusMes);
@@ -290,14 +332,60 @@
             return filteredData;
         }
 
+        // Get ISO week number (YYYY-WW format)
+        function getISOWeek(date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+            const yearStart = new Date(d.getFullYear(), 0, 1);
+            const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            return `${d.getFullYear()}-${String(weekNo).padStart(2, '0')}`;
+        }
+
+        // Aggregate daily data by week
+        function aggregateByWeek(dailyData) {
+            const weeklyMap = {};
+            
+            dailyData.forEach(item => {
+                const weekKey = getISOWeek(item.date);
+                
+                if (!weeklyMap[weekKey]) {
+                    weeklyMap[weekKey] = {
+                        week: weekKey,
+                        acus: 0,
+                        cost: 0
+                    };
+                }
+                
+                weeklyMap[weekKey].acus += item.acus;
+                weeklyMap[weekKey].cost += item.cost;
+            });
+            
+            // Convert to array and sort by week
+            const weeklyData = Object.values(weeklyMap).sort((a, b) => a.week.localeCompare(b.week));
+            
+            // Format for chart: use "Semana YYYY-WW" as label
+            return weeklyData.map(item => ({
+                date: `Semana ${item.week}`,
+                acus: parseFloat(item.acus.toFixed(2)),
+                cost: parseFloat(item.cost.toFixed(2))
+            }));
+        }
+
         // Chart.js instance
         let consumptionChart = null;
 
         // Update Chart with filtered data (Dual-Axis: ACUs and Cost)
         function updateChart(data) {
-            const labels = data.map(item => item.date);
-            const acusData = data.map(item => item.acus);
-            const costData = data.map(item => item.cost);
+            // Apply weekly aggregation if viewType is 'weekly'
+            let chartData = data;
+            if (currentFilters.viewType === 'weekly') {
+                chartData = aggregateByWeek(data);
+            }
+            
+            const labels = chartData.map(item => item.date);
+            const acusData = chartData.map(item => item.acus);
+            const costData = chartData.map(item => item.cost);
             
             const ctx = document.getElementById('consumption-chart').getContext('2d');
             
@@ -517,6 +605,27 @@
 
         document.getElementById('org-filter').addEventListener('change', function(e) {
             currentFilters.organization = e.target.value || null;
+            const filteredData = filterData();
+            updateChart(filteredData);
+        });
+
+        // View toggle buttons
+        document.getElementById('btn-view-daily').addEventListener('click', function() {
+            currentFilters.viewType = 'daily';
+            // Update button styles
+            document.getElementById('btn-view-daily').className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold';
+            document.getElementById('btn-view-weekly').className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold';
+            // Update chart
+            const filteredData = filterData();
+            updateChart(filteredData);
+        });
+
+        document.getElementById('btn-view-weekly').addEventListener('click', function() {
+            currentFilters.viewType = 'weekly';
+            // Update button styles
+            document.getElementById('btn-view-daily').className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold';
+            document.getElementById('btn-view-weekly').className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold';
+            // Update chart
             const filteredData = filterData();
             updateChart(filteredData);
         });
