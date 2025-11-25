@@ -66,22 +66,10 @@
             </div>
         </div>
 
-        <!-- Sección de Gráfico de Consumo -->
-        <div class="bg-white rounded-lg shadow-lg p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-2xl font-bold text-gray-800">Consumo de ACUs</h2>
-                <div class="flex gap-2">
-                    <button id="btn-view-daily" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
-                        Diario
-                    </button>
-                    <button id="btn-view-weekly" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
-                        Semanal
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Filtros de Período -->
-            <div class="mb-6 flex flex-wrap gap-4 items-center">
+        <!-- Filtros de Período -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Filtros</h2>
+            <div class="flex flex-wrap gap-4 items-center">
                 <div class="flex items-center gap-2">
                     <label for="month-filter" class="text-sm font-semibold text-gray-700">Filtro por Mes:</label>
                     <select id="month-filter" class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -113,10 +101,44 @@
                     </select>
                 </div>
             </div>
+        </div>
 
-            <!-- Chart Container -->
-            <div class="relative" style="height: 400px;">
-                <canvas id="consumption-chart"></canvas>
+        <!-- Sección de Visualizaciones: 2/3 Gráfico de Líneas + 1/3 Gráfico de Distribución -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Gráfico de Líneas de Tendencia (2/3) -->
+            <div class="lg:col-span-2 bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">Tendencia de Consumo</h2>
+                    <div class="flex gap-2">
+                        <button id="btn-view-daily" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold">
+                            Diario
+                        </button>
+                        <button id="btn-view-weekly" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold">
+                            Semanal
+                        </button>
+                    </div>
+                </div>
+                <div class="relative" style="height: 400px;">
+                    <canvas id="consumption-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico de Distribución Consolidado (1/3) -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="mb-4">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-3">Distribución</h2>
+                    <div class="flex gap-2 justify-center">
+                        <button id="btn-dist-user" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm">
+                            Por Usuario
+                        </button>
+                        <button id="btn-dist-org" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold text-sm">
+                            Por Organización
+                        </button>
+                    </div>
+                </div>
+                <div class="relative" style="height: 350px;">
+                    <canvas id="distribution-chart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -396,8 +418,12 @@
             }));
         }
 
-        // Chart.js instance
+        // Chart.js instances
         let consumptionChart = null;
+        let distributionChart = null;
+        
+        // Distribution view type: 'user' or 'organization'
+        let distributionViewType = 'user';
 
         // Update Chart with filtered data (Dual-Axis: ACUs and Cost)
         function updateChart(data) {
@@ -525,6 +551,88 @@
             });
         }
 
+        // Update Distribution Chart (Doughnut) with filtered data
+        function updateDistributionChart(data) {
+            const ctx = document.getElementById('distribution-chart').getContext('2d');
+            
+            // Aggregate data by user or organization
+            const aggregated = {};
+            
+            data.forEach(item => {
+                const key = distributionViewType === 'user' ? item.userId : item.organizationId;
+                if (!aggregated[key]) {
+                    aggregated[key] = 0;
+                }
+                aggregated[key] += item.acus;
+            });
+            
+            // Convert to arrays for Chart.js
+            const labels = Object.keys(aggregated).sort();
+            const values = labels.map(label => aggregated[label].toFixed(2));
+            
+            // Color palette for the doughnut chart
+            const colors = [
+                'rgba(59, 130, 246, 0.8)',   // Blue
+                'rgba(16, 185, 129, 0.8)',   // Green
+                'rgba(251, 146, 60, 0.8)',   // Orange
+                'rgba(139, 92, 246, 0.8)',   // Purple
+                'rgba(236, 72, 153, 0.8)',   // Pink
+                'rgba(34, 197, 94, 0.8)',    // Lime
+                'rgba(239, 68, 68, 0.8)',    // Red
+                'rgba(14, 165, 233, 0.8)',   // Sky
+                'rgba(168, 85, 247, 0.8)',   // Violet
+                'rgba(245, 158, 11, 0.8)'    // Amber
+            ];
+            
+            // Destroy existing chart if it exists
+            if (distributionChart) {
+                distributionChart.destroy();
+            }
+            
+            // Create new doughnut chart
+            distributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'ACUs Consumidos',
+                        data: values,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 8,
+                                font: {
+                                    size: 11
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => parseFloat(a) + parseFloat(b), 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return `${label}: ${value} ACUs (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         // Populate month filter dropdown
         function populateMonthFilter() {
             const monthSelect = document.getElementById('month-filter');
@@ -603,6 +711,7 @@
             currentFilters.month = e.target.value || null;
             const filteredData = filterData();
             updateChart(filteredData);
+            updateDistributionChart(filteredData);
         });
 
         document.getElementById('btn-60-days').addEventListener('click', function() {
@@ -611,6 +720,7 @@
             document.getElementById('month-filter').value = '';
             const filteredData = filterData();
             updateChart(filteredData);
+            updateDistributionChart(filteredData);
         });
 
         document.getElementById('btn-90-days').addEventListener('click', function() {
@@ -619,18 +729,21 @@
             document.getElementById('month-filter').value = '';
             const filteredData = filterData();
             updateChart(filteredData);
+            updateDistributionChart(filteredData);
         });
 
         document.getElementById('user-filter').addEventListener('change', function(e) {
             currentFilters.user = e.target.value || null;
             const filteredData = filterData();
             updateChart(filteredData);
+            updateDistributionChart(filteredData);
         });
 
         document.getElementById('org-filter').addEventListener('change', function(e) {
             currentFilters.organization = e.target.value || null;
             const filteredData = filterData();
             updateChart(filteredData);
+            updateDistributionChart(filteredData);
         });
 
         // View toggle buttons
@@ -654,6 +767,27 @@
             updateChart(filteredData);
         });
 
+        // Distribution view toggle buttons
+        document.getElementById('btn-dist-user').addEventListener('click', function() {
+            distributionViewType = 'user';
+            // Update button styles
+            document.getElementById('btn-dist-user').className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm';
+            document.getElementById('btn-dist-org').className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold text-sm';
+            // Update distribution chart
+            const filteredData = filterData();
+            updateDistributionChart(filteredData);
+        });
+
+        document.getElementById('btn-dist-org').addEventListener('click', function() {
+            distributionViewType = 'organization';
+            // Update button styles
+            document.getElementById('btn-dist-user').className = 'px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition font-semibold text-sm';
+            document.getElementById('btn-dist-org').className = 'px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm';
+            // Update distribution chart
+            const filteredData = filterData();
+            updateDistributionChart(filteredData);
+        });
+
         // ==========================================
         // INITIALIZATION
         // ==========================================
@@ -667,10 +801,11 @@
             populateUserFilter();
             populateOrgFilter();
             
-            // Initialize chart with last 90 days (default view)
+            // Initialize charts with last 90 days (default view)
             currentFilters.days = 90;
             const defaultData = filterData();
             updateChart(defaultData);
+            updateDistributionChart(defaultData);
         });
     </script>
 </body>
