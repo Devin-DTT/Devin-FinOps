@@ -8,6 +8,10 @@ import json
 import logging
 import requests
 from typing import List, Dict, Any, Optional
+from datetime import datetime
+
+from error_handling import handle_api_errors, APIError, AuthenticationError
+from validators import APIRequestParams, EndpointListInput
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +42,56 @@ def setup_logging():
     root_logger.addHandler(console_handler)
 
 
+def _resolve_api_key(api_key: Optional[str] = None) -> str:
+    """
+    Resolve the API key from parameter or environment variable.
+
+    Args:
+        api_key: Explicit API key, or None to read from environment.
+
+    Returns:
+        The resolved API key string.
+
+    Raises:
+        ValueError: If no API key can be resolved.
+    """
+    if api_key:
+        return api_key
+    env_key = os.getenv('DEVIN_ENTERPRISE_API_KEY')
+    if not env_key:
+        error_msg = "DEVIN_ENTERPRISE_API_KEY environment variable not set"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    return env_key
+
+
+def _build_headers(api_key: str) -> Dict[str, str]:
+    """Return standard API request headers."""
+    return {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json',
+    }
+
+
+@handle_api_errors(max_retries=3, base_delay=1.0)
+def _fetch_page(
+    url: str,
+    headers: Dict[str, str],
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Fetch a single page from the API with retry logic via decorator.
+
+    Raises:
+        requests.exceptions.HTTPError: On non-2xx responses.
+        requests.exceptions.Timeout: On request timeout.
+        requests.exceptions.ConnectionError: On connection failure.
+    """
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_cognition_data(
     base_url: str = "https://api.devin.ai/v2/enterprise",
     endpoint: str = "/consumption/daily",
@@ -59,99 +113,60 @@ def fetch_cognition_data(
         List of usage data records
 
     Raises:
-        requests.exceptions.RequestException: For connection/HTTP errors
+        ValidationError: If input parameters fail validation
+        APIError: For API-related errors after retries
         ValueError: For authentication errors
     """
+    validated = APIRequestParams(
+        base_url=base_url,
+        endpoint=endpoint,
+        api_key=api_key,
+        page_size=page_size,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
     logger.info("Starting data fetch from Cognition API")
-    logger.info(f"API Base URL: {base_url}")
-    logger.info(f"Endpoint: {endpoint}")
+    logger.info(f"API Base URL: {validated.base_url}")
+    logger.info(f"Endpoint: {validated.endpoint}")
 
-    if api_key is None:
-        api_key = os.getenv('DEVIN_ENTERPRISE_API_KEY')
-        if not api_key:
-            error_msg = "DEVIN_ENTERPRISE_API_KEY environment variable not set"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+    resolved_key = _resolve_api_key(validated.api_key)
 
-    full_url = f"{base_url.rstrip('/')}{endpoint}"
+    full_url = f"{validated.base_url.rstrip('/')}{validated.endpoint}"
     logger.info(f"Full API URL: {full_url}")
 
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
+    headers = _build_headers(resolved_key)
 
-    all_data = []
+    all_data: List[Dict[str, Any]] = []
     skip = 0
     has_more = True
     page_count = 0
 
-    try:
-        while has_more:
-            page_count += 1
-            params = {
-                'skip': skip,
-                'limit': page_size
-            }
-            
-            if start_date:
-                params['start_date'] = start_date
-            if end_date:
-                params['end_date'] = end_date
+    while has_more:
+        page_count += 1
+        request_params: Dict[str, Any] = {
+            'skip': skip,
+            'limit': validated.page_size,
+        }
+        if validated.start_date:
+            request_params['start_date'] = validated.start_date
+        if validated.end_date:
+            request_params['end_date'] = validated.end_date
 
-            logger.info(f"Fetching page {page_count} (skip={skip}, limit={page_size})")
+        logger.info(f"Fetching page {page_count} (skip={skip}, limit={validated.page_size})")
 
-            try:
-                response = requests.get(
-                    full_url,
-                    headers=headers,
-                    params=params,
-                    timeout=30
-                )
+        response_data = _fetch_page(full_url, headers, request_params)
 
-                if response.status_code == 401:
-                    error_msg = "Authentication failed (401): Invalid API key"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
+        page_data = response_data.get('data', [])
+        all_data.extend(page_data)
 
-                if response.status_code == 403:
-                    error_msg = "Authorization failed (403): Access denied"
-                    logger.error(error_msg)
-                    raise ValueError(error_msg)
+        logger.info(f"Page {page_count} fetched: {len(page_data)} records")
 
-                response.raise_for_status()
+        has_more = response_data.get('has_more', False)
+        skip += validated.page_size
 
-                response_data = response.json()
-
-                page_data = response_data.get('data', [])
-                all_data.extend(page_data)
-
-                logger.info(f"Page {page_count} fetched: {len(page_data)} records")
-
-                has_more = response_data.get('has_more', False)
-                skip += page_size
-
-            except requests.exceptions.Timeout:
-                error_msg = f"Request timeout on page {page_count}"
-                logger.error(error_msg)
-                raise requests.exceptions.RequestException(error_msg)
-
-            except requests.exceptions.ConnectionError as e:
-                error_msg = f"Connection error on page {page_count}: {e}"
-                logger.error(error_msg)
-                raise
-
-            except requests.exceptions.HTTPError as e:
-                error_msg = f"HTTP error on page {page_count}: {e}"
-                logger.error(error_msg)
-                raise
-
-        logger.info(f"Data fetch complete: {len(all_data)} total records from {page_count} pages")
-        return all_data
-
-    except Exception as e:
-        logger.error(f"Failed to fetch data from Cognition API: {e}", exc_info=True)
-        raise
+    logger.info(f"Data fetch complete: {len(all_data)} total records from {page_count} pages")
+    return all_data
 
 
 def write_raw_data(data: List[Dict[str, Any]], output_file: str = 'raw_usage_data.json') -> None:
@@ -175,61 +190,68 @@ def write_raw_data(data: List[Dict[str, Any]], output_file: str = 'raw_usage_dat
         raise
 
 
-def fetch_api_data(endpoint_list: Dict[str, str], params_by_endpoint: Optional[Dict[str, Dict[str, str]]] = None) -> Dict[str, Dict[str, Any]]:
+@handle_api_errors(max_retries=3, base_delay=1.0)
+def _fetch_single_endpoint(
+    url: str,
+    headers: Dict[str, str],
+    params: Optional[Dict[str, str]] = None,
+) -> requests.Response:
+    """
+    Fetch a single endpoint with retry logic via decorator.
+
+    Returns the raw Response object so callers can inspect status_code.
+    """
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+    return response
+
+
+def fetch_api_data(
+    endpoint_list: Dict[str, str],
+    params_by_endpoint: Optional[Dict[str, Dict[str, str]]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     Fetch data from multiple API endpoints.
-    
+
     Args:
         endpoint_list: Dictionary of {endpoint_name: endpoint_path}
         params_by_endpoint: Optional dictionary of {endpoint_name: {param_name: param_value}}
-                           to pass query parameters to specific endpoints
-    
+
     Returns:
         Dictionary of {endpoint_name: {status_code, timestamp, response}}
     """
-    from datetime import datetime
-    
-    api_key = os.getenv('DEVIN_ENTERPRISE_API_KEY')
-    if not api_key:
-        error_msg = "DEVIN_ENTERPRISE_API_KEY environment variable not set"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    results = {}
-    
-    logger.info(f"Starting multi-endpoint data fetch for {len(endpoint_list)} endpoints")
-    
-    for endpoint_name, endpoint_path in endpoint_list.items():
+    validated = EndpointListInput(
+        endpoint_list=endpoint_list,
+        params_by_endpoint=params_by_endpoint,
+    )
+
+    api_key = _resolve_api_key()
+    headers = _build_headers(api_key)
+
+    results: Dict[str, Dict[str, Any]] = {}
+
+    logger.info(f"Starting multi-endpoint data fetch for {len(validated.endpoint_list)} endpoints")
+
+    for endpoint_name, endpoint_path in validated.endpoint_list.items():
         logger.info(f"Fetching endpoint: {endpoint_name} ({endpoint_path})")
-        
+
         if endpoint_path.startswith('/audit-logs'):
             base_url = "https://api.devin.ai/v2"
         else:
             base_url = "https://api.devin.ai/v2/enterprise"
-        
+
         full_url = f"{base_url.rstrip('/')}{endpoint_path}"
-        
-        params = None
-        if params_by_endpoint and endpoint_name in params_by_endpoint:
-            params = params_by_endpoint[endpoint_name]
-            logger.info(f"    - Using params: {params}")
-        
+
+        ep_params = None
+        if validated.params_by_endpoint and endpoint_name in validated.params_by_endpoint:
+            ep_params = validated.params_by_endpoint[endpoint_name]
+            logger.info(f"    - Using params: {ep_params}")
+
         try:
-            response = requests.get(
-                full_url,
-                headers=headers,
-                params=params,
-                timeout=30
-            )
-            
+            response = _fetch_single_endpoint(full_url, headers, ep_params)
+
             timestamp = datetime.now().isoformat()
             status_code = response.status_code
-            
+
             if status_code == 200:
                 try:
                     response_data = response.json()
@@ -237,189 +259,166 @@ def fetch_api_data(endpoint_list: Dict[str, str], params_by_endpoint: Optional[D
                     response_data = response.text
             else:
                 response_data = response.text
-            
+
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,
                 'status_code': status_code,
                 'timestamp': timestamp,
-                'response': response_data
+                'response': response_data,
             }
-            
+
             logger.info(f"    - Status: {status_code}")
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"    - Timeout error for {endpoint_name}")
+
+        except (APIError, AuthenticationError) as exc:
+            logger.error(f"    - API error for {endpoint_name}: {exc}")
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,
-                'status_code': 'TIMEOUT',
+                'status_code': exc.status_code or 'ERROR',
                 'timestamp': datetime.now().isoformat(),
-                'response': 'Request timeout'
+                'response': str(exc),
             }
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"    - Connection error for {endpoint_name}: {e}")
-            results[endpoint_name] = {
-                'endpoint_path': endpoint_path,
-                'full_url': full_url,
-                'status_code': 'CONNECTION_ERROR',
-                'timestamp': datetime.now().isoformat(),
-                'response': str(e)
-            }
-        except Exception as e:
-            logger.error(f"    - Error for {endpoint_name}: {e}")
+        except Exception as exc:
+            logger.error(f"    - Error for {endpoint_name}: {exc}")
             results[endpoint_name] = {
                 'endpoint_path': endpoint_path,
                 'full_url': full_url,
                 'status_code': 'ERROR',
                 'timestamp': datetime.now().isoformat(),
-                'response': str(e)
+                'response': str(exc),
             }
-    
+
     logger.info(f"Multi-endpoint fetch complete: {len(results)} endpoints processed")
     return results
+
+
+@handle_api_errors(max_retries=3, base_delay=1.0)
+def _fetch_user_org(url: str, headers: Dict[str, str]) -> requests.Response:
+    """Fetch organization data for a single user with retry logic."""
+    response = requests.get(url, headers=headers, timeout=30)
+    return response
 
 
 def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
     """
     Fetch organization mappings for multiple users iteratively.
-    
+
     Args:
         user_ids: List of user IDs to fetch organization mappings for
-    
+
     Returns:
         Dictionary mapping user_id to organization data
         Format: {user_id: {'organization_id': str, 'organization_name': str, 'status': int}}
     """
     logger.info(f"Starting iterative organization mapping fetch for {len(user_ids)} users")
-    
-    api_key = os.getenv('DEVIN_ENTERPRISE_API_KEY')
-    if not api_key:
-        error_msg = "DEVIN_ENTERPRISE_API_KEY environment variable not set"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    user_org_mappings = {}
+
+    api_key = _resolve_api_key()
+    headers = _build_headers(api_key)
+
+    user_org_mappings: Dict[str, Any] = {}
     base_url = "https://api.devin.ai/v2/enterprise"
-    
+
     for user_id in user_ids:
         endpoint_path = f"/members/{user_id}/organizations"
         full_url = f"{base_url}{endpoint_path}"
-        
+
         logger.info(f"Fetching organization mapping for user: {user_id}")
-        
+
         try:
-            response = requests.get(
-                full_url,
-                headers=headers,
-                timeout=30
-            )
-            
+            response = _fetch_user_org(full_url, headers)
+
             status_code = response.status_code
-            
+
             if status_code == 200:
                 try:
                     org_data = response.json()
-                    
+
                     if isinstance(org_data, dict):
                         if 'organizations' in org_data and org_data['organizations']:
                             first_org = org_data['organizations'][0]
                             user_org_mappings[user_id] = {
                                 'organization_id': first_org.get('id', 'Unknown'),
                                 'organization_name': first_org.get('name', 'Unknown'),
-                                'status': status_code
+                                'status': status_code,
                             }
                         elif 'id' in org_data:
                             user_org_mappings[user_id] = {
                                 'organization_id': org_data.get('id', 'Unknown'),
                                 'organization_name': org_data.get('name', 'Unknown'),
-                                'status': status_code
+                                'status': status_code,
                             }
                         else:
                             user_org_mappings[user_id] = {
                                 'organization_id': 'Unknown',
                                 'organization_name': 'Unknown',
                                 'status': status_code,
-                                'raw_response': org_data
+                                'raw_response': org_data,
                             }
                     elif isinstance(org_data, list) and org_data:
                         first_org = org_data[0]
                         user_org_mappings[user_id] = {
                             'organization_id': first_org.get('id', 'Unknown'),
                             'organization_name': first_org.get('name', 'Unknown'),
-                            'status': status_code
+                            'status': status_code,
                         }
                     else:
                         user_org_mappings[user_id] = {
                             'organization_id': 'Unknown',
                             'organization_name': 'Unknown',
-                            'status': status_code
+                            'status': status_code,
                         }
-                    
+
                     logger.info(f"  + User {user_id}: {user_org_mappings[user_id].get('organization_name', 'Unknown')}")
-                    
+
                 except json.JSONDecodeError as e:
                     logger.warning(f"  - User {user_id}: Failed to parse JSON response - {e}")
                     user_org_mappings[user_id] = {
                         'organization_id': 'Unmapped',
                         'organization_name': 'Unmapped',
                         'status': status_code,
-                        'error': 'JSON decode error'
+                        'error': 'JSON decode error',
                     }
-            
+
             elif status_code == 404:
                 logger.warning(f"  - User {user_id}: Not found (404)")
                 user_org_mappings[user_id] = {
                     'organization_id': 'Unmapped',
                     'organization_name': 'Unmapped',
                     'status': status_code,
-                    'error': 'User not found'
+                    'error': 'User not found',
                 }
-            
+
             else:
                 logger.warning(f"  - User {user_id}: HTTP {status_code}")
                 user_org_mappings[user_id] = {
                     'organization_id': 'Unmapped',
                     'organization_name': 'Unmapped',
                     'status': status_code,
-                    'error': f'HTTP {status_code}'
+                    'error': f'HTTP {status_code}',
                 }
-        
-        except requests.exceptions.Timeout:
-            logger.error(f"  - User {user_id}: Request timeout")
+
+        except (APIError, AuthenticationError) as exc:
+            logger.error(f"  - User {user_id}: API error - {exc}")
             user_org_mappings[user_id] = {
                 'organization_id': 'Unmapped',
                 'organization_name': 'Unmapped',
-                'status': 'TIMEOUT',
-                'error': 'Request timeout'
+                'status': exc.status_code or 'ERROR',
+                'error': str(exc),
             }
-        
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"  - User {user_id}: Connection error - {e}")
-            user_org_mappings[user_id] = {
-                'organization_id': 'Unmapped',
-                'organization_name': 'Unmapped',
-                'status': 'CONNECTION_ERROR',
-                'error': str(e)
-            }
-        
-        except Exception as e:
-            logger.error(f"  - User {user_id}: Unexpected error - {e}")
+
+        except Exception as exc:
+            logger.error(f"  - User {user_id}: Unexpected error - {exc}")
             user_org_mappings[user_id] = {
                 'organization_id': 'Unmapped',
                 'organization_name': 'Unmapped',
                 'status': 'ERROR',
-                'error': str(e)
+                'error': str(exc),
             }
-    
+
     successful_mappings = sum(1 for m in user_org_mappings.values() if m['status'] == 200)
     logger.info(f"Organization mapping fetch complete: {successful_mappings}/{len(user_ids)} successful")
-    
+
     return user_org_mappings
 
 
@@ -446,8 +445,8 @@ def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.jso
 
 def main(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Main execution function for data adapter."""
-    from datetime import datetime, timedelta
-    
+    from datetime import timedelta
+
     setup_logging()
 
     logger.info("=" * 60)

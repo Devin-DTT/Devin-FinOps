@@ -7,7 +7,9 @@ import json
 import logging
 from typing import Dict, List, Any
 from collections import defaultdict
+
 from config import MetricsConfig
+from validators import UsageData
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ class MetricsCalculator:
 
     def load_data(self, json_file_path: str) -> None:
         """
-        Load usage data from JSON file.
+        Load and validate usage data from JSON file.
 
         Args:
             json_file_path: Path to the raw_usage_data.json file
@@ -41,14 +43,18 @@ class MetricsCalculator:
         Raises:
             FileNotFoundError: If the file doesn't exist
             json.JSONDecodeError: If the file is not valid JSON
+            ValidationError: If the data fails Pydantic validation
         """
         logger.info(f"Loading data from {json_file_path}")
         with open(json_file_path, 'r') as f:
-            self.data = json.load(f)
+            raw = json.load(f)
 
-        self.sessions = self.data.get('sessions', [])
-        self.users = self.data.get('user_details', [])
-        logger.info(f"Data loaded: {len(self.sessions)} sessions, {len(self.users)} users")
+        validated = UsageData.model_validate(raw)
+
+        self.data = raw
+        self.sessions = [s.model_dump() for s in validated.sessions]
+        self.users = [u.model_dump() for u in validated.user_details]
+        logger.info(f"Data loaded and validated: {len(self.sessions)} sessions, {len(self.users)} users")
 
     def calculate_total_monthly_cost(self) -> float:
         """
