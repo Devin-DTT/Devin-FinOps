@@ -8,10 +8,8 @@ import logging
 from typing import Dict, List, Any
 from collections import defaultdict
 
-from pydantic import ValidationError
-
 from config import MetricsConfig
-from validators import UsageData, MetricsConfigInput
+from validators import UsageData
 
 logger = logging.getLogger(__name__)
 
