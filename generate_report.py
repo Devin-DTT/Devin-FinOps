@@ -15,6 +15,7 @@ from typing import Dict, Any, List
 from metrics_calculator import MetricsCalculator
 from config import MetricsConfig
 import data_adapter
+from data_adapter import safe_extract_response
 from export_metrics import export_daily_acus_to_csv
 from export_metrics_summary import export_summary_to_excel
 
@@ -88,100 +89,75 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
     base_data = {}
     
     consumption_endpoint = all_api_data.get('consumption_daily', {})
-    if consumption_endpoint.get('status_code') == 200:
-        try:
-            response_data = consumption_endpoint.get('response', {})
-            if isinstance(response_data, str):
-                response_data = json.loads(response_data)
-            
-            if isinstance(response_data, dict):
-                total_acus = response_data.get('total_acus', 0)
-                consumption_by_date = response_data.get('consumption_by_date', {})
-                consumption_by_user = response_data.get('consumption_by_user', {})
-                consumption_by_org_id = response_data.get('consumption_by_org_id', {})
-                
-                base_data['total_acus'] = {
-                    'value': total_acus,
-                    'source': 'consumption_daily.response.total_acus'
-                }
-                base_data['consumption_by_date'] = {
-                    'value': consumption_by_date,
-                    'source': 'consumption_daily.response.consumption_by_date'
-                }
-                base_data['consumption_by_user'] = {
-                    'value': consumption_by_user,
-                    'source': 'consumption_daily.response.consumption_by_user'
-                }
-                base_data['consumption_by_org_id'] = {
-                    'value': consumption_by_org_id,
-                    'source': 'consumption_daily.response.consumption_by_org_id'
-                }
-                base_data['unique_users'] = {
-                    'value': len(consumption_by_user),
-                    'source': 'consumption_daily.response.consumption_by_user (count)'
-                }
-                base_data['num_organizations'] = {
-                    'value': len(consumption_by_org_id),
-                    'source': 'consumption_daily.response.consumption_by_org_id (count keys)'
-                }
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            logger.warning(f"Failed to extract consumption_daily metrics: {e}")
+    response_data = safe_extract_response(consumption_endpoint)
+    if response_data is not None:
+        total_acus = response_data.get('total_acus', 0)
+        consumption_by_date = response_data.get('consumption_by_date', {})
+        consumption_by_user = response_data.get('consumption_by_user', {})
+        consumption_by_org_id = response_data.get('consumption_by_org_id', {})
+        
+        base_data['total_acus'] = {
+            'value': total_acus,
+            'source': 'consumption_daily.response.total_acus'
+        }
+        base_data['consumption_by_date'] = {
+            'value': consumption_by_date,
+            'source': 'consumption_daily.response.consumption_by_date'
+        }
+        base_data['consumption_by_user'] = {
+            'value': consumption_by_user,
+            'source': 'consumption_daily.response.consumption_by_user'
+        }
+        base_data['consumption_by_org_id'] = {
+            'value': consumption_by_org_id,
+            'source': 'consumption_daily.response.consumption_by_org_id'
+        }
+        base_data['unique_users'] = {
+            'value': len(consumption_by_user),
+            'source': 'consumption_daily.response.consumption_by_user (count)'
+        }
+        base_data['num_organizations'] = {
+            'value': len(consumption_by_org_id),
+            'source': 'consumption_daily.response.consumption_by_org_id (count keys)'
+        }
     
     metrics_prs_endpoint = all_api_data.get('metrics_prs', {})
-    if metrics_prs_endpoint.get('status_code') == 200:
-        try:
-            prs_response = metrics_prs_endpoint.get('response', {})
-            if isinstance(prs_response, str):
-                prs_response = json.loads(prs_response)
-            if isinstance(prs_response, dict):
-                prs_opened = prs_response.get('prs_opened', 0)
-                prs_closed = prs_response.get('prs_closed', 0)
-                prs_merged = prs_response.get('prs_merged', 0)
-                
-                base_data['prs_opened'] = {
-                    'value': prs_opened,
-                    'source': 'metrics_prs.response.prs_opened'
-                }
-                base_data['prs_closed'] = {
-                    'value': prs_closed,
-                    'source': 'metrics_prs.response.prs_closed'
-                }
-                base_data['prs_merged'] = {
-                    'value': prs_merged,
-                    'source': 'metrics_prs.response.prs_merged'
-                }
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            logger.warning(f"Failed to extract metrics_prs data: {e}")
+    prs_response = safe_extract_response(metrics_prs_endpoint)
+    if prs_response is not None:
+        prs_opened = prs_response.get('prs_opened', 0)
+        prs_closed = prs_response.get('prs_closed', 0)
+        prs_merged = prs_response.get('prs_merged', 0)
+        
+        base_data['prs_opened'] = {
+            'value': prs_opened,
+            'source': 'metrics_prs.response.prs_opened'
+        }
+        base_data['prs_closed'] = {
+            'value': prs_closed,
+            'source': 'metrics_prs.response.prs_closed'
+        }
+        base_data['prs_merged'] = {
+            'value': prs_merged,
+            'source': 'metrics_prs.response.prs_merged'
+        }
     
     metrics_sessions_endpoint = all_api_data.get('metrics_sessions', {})
-    if metrics_sessions_endpoint.get('status_code') == 200:
-        try:
-            sessions_response = metrics_sessions_endpoint.get('response', {})
-            if isinstance(sessions_response, str):
-                sessions_response = json.loads(sessions_response)
-            if isinstance(sessions_response, dict):
-                sessions_count = sessions_response.get('sessions_count', 0)
-                base_data['sessions_count'] = {
-                    'value': sessions_count,
-                    'source': 'metrics_sessions.response.sessions_count'
-                }
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            logger.warning(f"Failed to extract metrics_sessions data: {e}")
+    sessions_response = safe_extract_response(metrics_sessions_endpoint)
+    if sessions_response is not None:
+        sessions_count = sessions_response.get('sessions_count', 0)
+        base_data['sessions_count'] = {
+            'value': sessions_count,
+            'source': 'metrics_sessions.response.sessions_count'
+        }
     
     members_endpoint = all_api_data.get('members', {})
-    if members_endpoint.get('status_code') == 200:
-        try:
-            members_response = members_endpoint.get('response', {})
-            if isinstance(members_response, str):
-                members_response = json.loads(members_response)
-            if isinstance(members_response, dict):
-                user_count = members_response.get('total', 0)
-                base_data['user_count'] = {
-                    'value': user_count,
-                    'source': 'members.response.total'
-                }
-        except (json.JSONDecodeError, AttributeError, TypeError) as e:
-            logger.warning(f"Failed to extract members data: {e}")
+    members_response = safe_extract_response(members_endpoint)
+    if members_response is not None:
+        user_count = members_response.get('total', 0)
+        base_data['user_count'] = {
+            'value': user_count,
+            'source': 'members.response.total'
+        }
     
     base_data['price_per_acu'] = {
         'value': config.price_per_acu,
@@ -1317,54 +1293,33 @@ def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsC
     
     if all_api_data:
         consumption_endpoint = all_api_data.get('consumption_daily', {})
-        status_code = consumption_endpoint.get('status_code')
-        
-        if status_code == 200:
-            try:
-                response_data = consumption_endpoint.get('response', {})
-                if isinstance(response_data, str):
-                    response_data = json.loads(response_data)
-                
-                if isinstance(response_data, dict):
-                    total_acus = response_data.get('total_acus', 0)
-                    consumption_by_date = response_data.get('consumption_by_date', {})
-                    consumption_by_user = response_data.get('consumption_by_user', {})
-                    
-                    total_sessions = len(consumption_by_date)
-                    unique_users = len(consumption_by_user)
-                    total_cost = total_acus * config.price_per_acu
-                    
-                    logger.info(f"Extracted metrics from consumption_daily: {total_acus} ACUs, {total_sessions} records, {unique_users} users")
-            except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                logger.warning(f"Failed to extract consumption_daily metrics: {e}")
+        response_data = safe_extract_response(consumption_endpoint)
+        if response_data is not None:
+            total_acus = response_data.get('total_acus', 0)
+            consumption_by_date = response_data.get('consumption_by_date', {})
+            consumption_by_user = response_data.get('consumption_by_user', {})
+            
+            total_sessions = len(consumption_by_date)
+            unique_users = len(consumption_by_user)
+            total_cost = total_acus * config.price_per_acu
+            
+            logger.info(f"Extracted metrics from consumption_daily: {total_acus} ACUs, {total_sessions} records, {unique_users} users")
     
     total_prs_merged = 0
     if all_api_data:
         metrics_prs_endpoint = all_api_data.get('metrics_prs', {})
-        if metrics_prs_endpoint.get('status_code') == 200:
-            try:
-                prs_response = metrics_prs_endpoint.get('response', {})
-                if isinstance(prs_response, str):
-                    prs_response = json.loads(prs_response)
-                if isinstance(prs_response, dict):
-                    total_prs_merged = prs_response.get('prs_merged', 0)
-                    logger.info(f"Extracted PR metrics: {total_prs_merged} PRs merged")
-            except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                logger.warning(f"Failed to extract metrics_prs data: {e}")
+        prs_response = safe_extract_response(metrics_prs_endpoint)
+        if prs_response is not None:
+            total_prs_merged = prs_response.get('prs_merged', 0)
+            logger.info(f"Extracted PR metrics: {total_prs_merged} PRs merged")
     
     total_sessions_count = 0
     if all_api_data:
         metrics_sessions_endpoint = all_api_data.get('metrics_sessions', {})
-        if metrics_sessions_endpoint.get('status_code') == 200:
-            try:
-                sessions_response = metrics_sessions_endpoint.get('response', {})
-                if isinstance(sessions_response, str):
-                    sessions_response = json.loads(sessions_response)
-                if isinstance(sessions_response, dict):
-                    total_sessions_count = sessions_response.get('sessions_count', 0)
-                    logger.info(f"Extracted session metrics: {total_sessions_count} sessions")
-            except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                logger.warning(f"Failed to extract metrics_sessions data: {e}")
+        sessions_response = safe_extract_response(metrics_sessions_endpoint)
+        if sessions_response is not None:
+            total_sessions_count = sessions_response.get('sessions_count', 0)
+            logger.info(f"Extracted session metrics: {total_sessions_count} sessions")
     
     if total_acus == 0:
         total_sessions = metrics.get('06_total_sessions', 0)
@@ -1497,37 +1452,26 @@ def generate_consumption_summary(raw_data: Dict[str, Dict[str, Any]], calculated
         'Average_ACUs_Per_Day': 0.0
     }
     
-    if status_code == 200:
-        try:
-            response_str = consumption_endpoint.get('response', '{}')
-            consumption_data = json.loads(response_str) if isinstance(response_str, str) else response_str
+    consumption_data = safe_extract_response(consumption_endpoint)
+    if consumption_data is not None:
+        total_acus = consumption_data.get('total_acus', 0)
+        consumption_by_date = consumption_data.get('consumption_by_date', {})
+        
+        if consumption_by_date:
+            total_records = len(consumption_by_date)
+            avg_acus = total_acus / total_records if total_records > 0 else 0.0
             
-            if isinstance(consumption_data, dict):
-                total_acus = consumption_data.get('total_acus', 0)
-                consumption_by_date = consumption_data.get('consumption_by_date', {})
-                
-                if consumption_by_date:
-                    total_records = len(consumption_by_date)
-                    avg_acus = total_acus / total_records if total_records > 0 else 0.0
-                    
-                    summary = {
-                        'Status': 'SUCCESS',
-                        'Total_Daily_Consumption_Records': total_records,
-                        'Average_ACUs_Per_Day': round(avg_acus, 2)
-                    }
-                    
-                    logger.info(f"Business summary from API: {total_records} records, {avg_acus:.2f} avg ACUs/day")
-                else:
-                    logger.info("No consumption_by_date found in API response")
-            else:
-                logger.info("API response is not a dictionary")
-                
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse consumption data: {e}")
-        except Exception as e:
-            logger.error(f"Error processing consumption data: {e}")
+            summary = {
+                'Status': 'SUCCESS',
+                'Total_Daily_Consumption_Records': total_records,
+                'Average_ACUs_Per_Day': round(avg_acus, 2)
+            }
+            
+            logger.info(f"Business summary from API: {total_records} records, {avg_acus:.2f} avg ACUs/day")
+        else:
+            logger.info("No consumption_by_date found in API response")
     else:
-        logger.warning(f"Consumption endpoint returned status {status_code}")
+        logger.warning(f"Consumption endpoint returned status {consumption_endpoint.get('status_code')}")
     
     if summary['Total_Daily_Consumption_Records'] == 0 and calculated_metrics:
         total_sessions = calculated_metrics.get('metrics', {}).get('06_total_sessions', 0)
@@ -1664,24 +1608,17 @@ def main():
         
         if all_api_data:
             consumption_endpoint = all_api_data.get('consumption_daily', {})
-            if consumption_endpoint.get('status_code') == 200:
-                try:
-                    response_data = consumption_endpoint.get('response', {})
-                    if isinstance(response_data, str):
-                        response_data = json.loads(response_data)
-                    
-                    if isinstance(response_data, dict):
-                        consumption_by_date = response_data.get('consumption_by_date', {})
-                        for date, acus in consumption_by_date.items():
-                            daily_chart_data.append({'Date': date, 'ACUs': acus})
-                        
-                        consumption_by_user = response_data.get('consumption_by_user', {})
-                        for user_id, acus in consumption_by_user.items():
-                            user_chart_data.append({'User ID': user_id, 'ACUs': acus})
-                        
-                        logger.info(f"Prepared chart data: {len(daily_chart_data)} daily records, {len(user_chart_data)} users")
-                except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                    logger.warning(f"Failed to prepare chart data: {e}")
+            response_data = safe_extract_response(consumption_endpoint)
+            if response_data is not None:
+                consumption_by_date = response_data.get('consumption_by_date', {})
+                for date, acus in consumption_by_date.items():
+                    daily_chart_data.append({'Date': date, 'ACUs': acus})
+                
+                consumption_by_user = response_data.get('consumption_by_user', {})
+                for user_id, acus in consumption_by_user.items():
+                    user_chart_data.append({'User ID': user_id, 'ACUs': acus})
+                
+                logger.info(f"Prepared chart data: {len(daily_chart_data)} daily records, {len(user_chart_data)} users")
         
     except Exception as e:
         logger.error(f"Failed to fetch multi-endpoint data: {e}")
@@ -1723,40 +1660,33 @@ def main():
     
     if all_api_data:
         consumption_endpoint = all_api_data.get('consumption_daily', {})
-        if consumption_endpoint.get('status_code') == 200:
-            try:
-                response_data = consumption_endpoint.get('response', {})
-                if isinstance(response_data, str):
-                    response_data = json.loads(response_data)
+        response_data = safe_extract_response(consumption_endpoint)
+        if response_data is not None:
+            consumption_by_user = response_data.get('consumption_by_user', {})
+            
+            unique_user_ids = list(consumption_by_user.keys())
+            logger.info(f"Extracted {len(unique_user_ids)} unique user IDs from consumption data")
+            
+            if unique_user_ids:
+                logger.info("Fetching organization mappings for all users...")
+                user_org_mappings = data_adapter.fetch_user_organization_mappings(unique_user_ids)
+                logger.info(f"Organization mappings fetched for {len(user_org_mappings)} users")
+            
+            for user_id, acus in consumption_by_user.items():
+                cost_usd = round(acus * config.price_per_acu, 2)
                 
-                if isinstance(response_data, dict):
-                    consumption_by_user = response_data.get('consumption_by_user', {})
-                    
-                    unique_user_ids = list(consumption_by_user.keys())
-                    logger.info(f"Extracted {len(unique_user_ids)} unique user IDs from consumption data")
-                    
-                    if unique_user_ids:
-                        logger.info("Fetching organization mappings for all users...")
-                        user_org_mappings = data_adapter.fetch_user_organization_mappings(unique_user_ids)
-                        logger.info(f"Organization mappings fetched for {len(user_org_mappings)} users")
-                    
-                    for user_id, acus in consumption_by_user.items():
-                        cost_usd = round(acus * config.price_per_acu, 2)
-                        
-                        org_info = user_org_mappings.get(user_id, {})
-                        org_id = org_info.get('organization_id', 'Unmapped')
-                        org_name = org_info.get('organization_name', 'Unmapped')
-                        
-                        user_breakdown_list.append({
-                            'User ID': user_id,
-                            'ACUs Consumed': round(acus, 2),
-                            'Cost (USD)': cost_usd,
-                            'Organization ID': org_id,
-                            'Organization Name': org_name
-                        })
-                    logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from API data")
-            except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                logger.warning(f"Failed to prepare user breakdown list from API: {e}")
+                org_info = user_org_mappings.get(user_id, {})
+                org_id = org_info.get('organization_id', 'Unmapped')
+                org_name = org_info.get('organization_name', 'Unmapped')
+                
+                user_breakdown_list.append({
+                    'User ID': user_id,
+                    'ACUs Consumed': round(acus, 2),
+                    'Cost (USD)': cost_usd,
+                    'Organization ID': org_id,
+                    'Organization Name': org_name
+                })
+            logger.info(f"Prepared user breakdown list with {len(user_breakdown_list)} users from API data")
     
     if not user_breakdown_list:
         logger.info("API data not available, aggregating user consumption from transformed sessions")

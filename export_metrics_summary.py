@@ -9,6 +9,7 @@ from typing import Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from datetime import datetime
+from data_adapter import safe_extract_response
 
 logger = logging.getLogger(__name__)
 
@@ -166,15 +167,9 @@ def export_summary_to_excel(
         consumption_by_user = {}
         if all_api_data and isinstance(all_api_data, dict):
             consumption_endpoint = all_api_data.get('consumption_daily', {})
-            if consumption_endpoint.get('status_code') == 200:
-                try:
-                    response_data = consumption_endpoint.get('response', {})
-                    if isinstance(response_data, str):
-                        response_data = json.loads(response_data)
-                    if isinstance(response_data, dict):
-                        consumption_by_user = response_data.get('consumption_by_user', {})
-                except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                    logger.warning(f"Failed to extract consumption_by_user for new sheet: {e}")
+            response_data = safe_extract_response(consumption_endpoint)
+            if response_data is not None:
+                consumption_by_user = response_data.get('consumption_by_user', {})
         
         if consumption_by_user:
             ws_user = wb.create_sheet(title="Desglose Consumo Usuario")
@@ -208,15 +203,9 @@ def export_summary_to_excel(
         consumption_by_org_id = {}
         if all_api_data and isinstance(all_api_data, dict):
             consumption_endpoint = all_api_data.get('consumption_daily', {})
-            if consumption_endpoint.get('status_code') == 200:
-                try:
-                    response_data = consumption_endpoint.get('response', {})
-                    if isinstance(response_data, str):
-                        response_data = json.loads(response_data)
-                    if isinstance(response_data, dict):
-                        consumption_by_org_id = response_data.get('consumption_by_org_id', {})
-                except (json.JSONDecodeError, AttributeError, TypeError) as e:
-                    logger.warning(f"Failed to extract consumption_by_org_id for new sheet: {e}")
+            response_data = safe_extract_response(consumption_endpoint)
+            if response_data is not None:
+                consumption_by_org_id = response_data.get('consumption_by_org_id', {})
         
         if consumption_by_org_id:
             ws_org = wb.create_sheet(title="Desglose Consumo Organizacion")

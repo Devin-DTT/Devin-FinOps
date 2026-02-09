@@ -175,6 +175,19 @@ def write_raw_data(data: List[Dict[str, Any]], output_file: str = 'raw_usage_dat
         raise
 
 
+def safe_extract_response(endpoint_data, default=None):
+    """Extrae y parsea respuesta JSON de forma segura"""
+    if endpoint_data.get('status_code') != 200:
+        return default
+    response = endpoint_data.get('response', {})
+    if isinstance(response, str):
+        try:
+            response = json.loads(response)
+        except (json.JSONDecodeError, ValueError):
+            return default
+    return response if isinstance(response, dict) else default
+
+
 def fetch_api_data(endpoint_list: Dict[str, str], params_by_endpoint: Optional[Dict[str, Dict[str, str]]] = None) -> Dict[str, Dict[str, Any]]:
     """
     Fetch data from multiple API endpoints.
