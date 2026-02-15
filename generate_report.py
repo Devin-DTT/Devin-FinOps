@@ -342,7 +342,24 @@ def main():
     else:
         logger.warning("No consumption_by_date data available for monthly history")
     
-    export_summary_to_excel(all_metrics, config, all_api_data, summary_data=summary_data, user_breakdown_list=user_breakdown_list, org_breakdown_summary=org_breakdown_summary, finops_metrics=finops_metrics, monthly_consumption_history=monthly_consumption_history)
+    export_cfg = ExportConfig(output_filename='finops_summary_report.xlsx', config=config)
+    report_data = ReportData(
+        consumption_data=all_metrics or {},
+        all_api_data=all_api_data,
+        summary_data=summary_data,
+        finops_metrics=finops_metrics,
+    )
+    breakdown = BreakdownData(
+        user_breakdown_list=user_breakdown_list,
+        org_breakdown_summary=org_breakdown_summary,
+        monthly_consumption_history=monthly_consumption_history,
+    )
+    (
+        ReportBuilder(export_cfg)
+        .with_report_data(report_data)
+        .with_breakdown_data(breakdown)
+        .build()
+    )
     
     from html_dashboard import generate_html_dashboard
     generate_html_dashboard(summary_data, daily_chart_data, user_chart_data)
