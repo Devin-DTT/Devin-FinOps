@@ -8,6 +8,11 @@ import json
 import logging
 from typing import Dict, Any
 from config import MetricsConfig
+from error_handling import (
+    handle_pipeline_phase,
+    MetricsCalculationError,
+    DataValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +51,7 @@ def calculate_cost_from_acus(acus: float, cost_per_acu: float) -> float:
     return round(acus * cost_per_acu, 2)
 
 
+@handle_pipeline_phase(phase_name="CALCULATE_BASE", error_cls=MetricsCalculationError)
 def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: MetricsConfig) -> Dict[str, Dict[str, Any]]:
     """
     Calculate base metrics with full traceability to JSON source paths.
@@ -56,7 +62,21 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
     
     Returns:
         Dictionary containing base metrics with 'value' and 'source' keys
+    
+    Raises:
+        DataValidationError: If input data is invalid.
+        MetricsCalculationError: If metric extraction fails.
     """
+    if all_api_data is None:
+        logger.warning("[CALCULATE_BASE] all_api_data is None, returning empty base metrics")
+        return {'price_per_acu': {'value': config.price_per_acu, 'source': 'config.price_per_acu'}}
+
+    if not isinstance(all_api_data, dict):
+        raise DataValidationError(
+            "all_api_data must be a dictionary",
+            details={"received_type": type(all_api_data).__name__},
+        )
+
     base_data = {}
     
     consumption_endpoint = all_api_data.get('consumption_daily', {})
@@ -163,6 +183,7 @@ def calculate_base_metrics(all_api_data: Dict[str, Dict[str, Any]], config: Metr
     return base_data
 
 
+@handle_pipeline_phase(phase_name="CALCULATE_FINOPS", error_cls=MetricsCalculationError)
 def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str = None) -> Dict[str, Dict[str, Any]]:
     """
     Calculate FinOps metrics with full traceability for viable metrics and documentation for inviable metrics.
@@ -174,7 +195,20 @@ def calculate_finops_metrics(base_data: Dict[str, Dict[str, Any]], end_date: str
     
     Returns:
         Dictionary containing all metrics (viable and inviable) with traceability information, organized by category
+    
+    Raises:
+        DataValidationError: If base_data is invalid.
+        MetricsCalculationError: If FinOps metric calculation fails.
     """
+    if base_data is None:
+        raise DataValidationError(
+            "base_data cannot be None for FinOps metrics calculation",
+        )
+    if not isinstance(base_data, dict):
+        raise DataValidationError(
+            "base_data must be a dictionary",
+            details={"received_type": type(base_data).__name__},
+        )
     from datetime import datetime
     from dateutil.relativedelta import relativedelta
     

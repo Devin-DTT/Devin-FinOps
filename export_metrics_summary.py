@@ -9,10 +9,12 @@ from typing import Dict, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from datetime import datetime
+from error_handling import handle_pipeline_phase, ExportError, DataValidationError
 
 logger = logging.getLogger(__name__)
 
 
+@handle_pipeline_phase(phase_name="EXPORT_EXCEL", error_cls=ExportError)
 def export_summary_to_excel(
     consumption_data: Dict[str, Any],
     config: Any,
@@ -35,9 +37,19 @@ def export_summary_to_excel(
         user_breakdown_list: List of user consumption breakdown dictionaries
         org_breakdown_summary: Dictionary of organization aggregation data
         finops_metrics: Dictionary containing FinOps metrics with traceability information
-    """
-    logger.info(f"Exporting summary data to {output_filename}...")
     
+    Raises:
+        DataValidationError: If required input data is missing or invalid.
+        ExportError: If Excel export fails.
+    """
+    logger.info("[EXPORT_EXCEL] Exporting summary data to %s", output_filename)
+
+    if consumption_data is None:
+        raise DataValidationError(
+            "consumption_data is required for Excel export",
+            details={"output_filename": output_filename},
+        )
+
     try:
         wb = Workbook()
         ws = wb.active
@@ -283,6 +295,17 @@ def export_summary_to_excel(
         logger.info(f"Successfully exported summary to {output_filename}")
         print(f"\n+ Summary data exported to {output_filename}")
         
+    except ExportError:
+        raise
+    except DataValidationError:
+        raise
     except Exception as e:
-        logger.error(f"Failed to export summary to Excel: {e}", exc_info=True)
-        print(f"\n- Error exporting summary to Excel: {e}")
+        logger.error(
+            "[EXPORT_EXCEL] Failed to export summary to Excel: %s",
+            e,
+            exc_info=True,
+        )
+        raise ExportError(
+            f"Failed to export summary to Excel: {e}",
+            details={"output_filename": output_filename, "error": str(e)},
+        ) from e

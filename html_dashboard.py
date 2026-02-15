@@ -6,10 +6,12 @@ Generates an interactive HTML dashboard with charts for consumption visualizatio
 import json
 import logging
 from typing import Dict, Any, List
+from error_handling import handle_pipeline_phase, ExportError, DataValidationError
 
 logger = logging.getLogger(__name__)
 
 
+@handle_pipeline_phase(phase_name="EXPORT_HTML", error_cls=ExportError)
 def generate_html_dashboard(
     summary_data: Dict[str, Any],
     daily_chart_data: List[Dict[str, Any]],
@@ -22,8 +24,31 @@ def generate_html_dashboard(
         summary_data: Dictionary containing business summary metrics
         daily_chart_data: List of dicts with 'Date' and 'ACUs' keys
         user_chart_data: List of dicts with 'User ID' and 'ACUs' keys
+    
+    Raises:
+        DataValidationError: If summary_data is missing or invalid.
+        ExportError: If HTML generation fails.
     """
-    logger.info("Generating HTML dashboard...")
+    logger.info("[EXPORT_HTML] Generating HTML dashboard...")
+
+    if summary_data is None:
+        raise DataValidationError(
+            "summary_data is required for HTML dashboard generation",
+        )
+    if not isinstance(summary_data, dict):
+        raise DataValidationError(
+            "summary_data must be a dictionary",
+            details={"received_type": type(summary_data).__name__},
+        )
+
+    required_keys = ['total_acus', 'total_cost', 'currency', 'total_prs_merged',
+                     'total_sessions_count', 'cost_per_pr', 'unique_users']
+    missing_keys = [k for k in required_keys if k not in summary_data]
+    if missing_keys:
+        logger.warning(
+            "[EXPORT_HTML] summary_data missing keys: %s",
+            ", ".join(missing_keys),
+        )
     
     daily_dates = [item['Date'] for item in daily_chart_data] if daily_chart_data else []
     daily_acus = [round(item['ACUs'], 2) for item in daily_chart_data] if daily_chart_data else []
@@ -251,11 +276,7 @@ def generate_html_dashboard(
 </html>"""
     
     output_file = 'finops_dashboard.html'
-    try:
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        logger.info(f"Successfully generated {output_file}")
-        print(f"\n+ HTML dashboard generated: {output_file}")
-    except Exception as e:
-        logger.error(f"Failed to generate HTML dashboard: {e}", exc_info=True)
-        print(f"\n- Error generating HTML dashboard: {e}")
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    logger.info("[EXPORT_HTML] Successfully generated %s", output_file)
+    print(f"\n+ HTML dashboard generated: {output_file}")

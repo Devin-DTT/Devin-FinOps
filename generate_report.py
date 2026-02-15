@@ -29,6 +29,13 @@ from data_transformer import (
     generate_business_summary,
     generate_consumption_summary,
 )
+from error_handling import (
+    PipelinePhaseError,
+    DataTransformationError,
+    MetricsCalculationError,
+    ExportError,
+    DataValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -200,17 +207,41 @@ def main():
     raw_data_file = 'raw_usage_data.json'
     temp_transformed_file = 'transformed_usage_data.json'
     
-    logger.info(f"Loading raw data from {raw_data_file}...")
-    with open(raw_data_file, 'r') as f:
-        raw_sessions = json.load(f)
+    logger.info("[PHASE_2] Loading raw data from %s", raw_data_file)
+    try:
+        with open(raw_data_file, 'r') as f:
+            raw_sessions = json.load(f)
+    except FileNotFoundError as exc:
+        logger.error(
+            "[PHASE_2] Raw data file not found: %s",
+            raw_data_file,
+        )
+        raise DataValidationError(
+            f"Raw data file not found: {raw_data_file}",
+            details={"file_path": raw_data_file},
+        ) from exc
+    except json.JSONDecodeError as exc:
+        logger.error(
+            "[PHASE_2] Invalid JSON in raw data file: %s",
+            raw_data_file,
+        )
+        raise DataValidationError(
+            f"Invalid JSON in raw data file: {raw_data_file}",
+            details={"file_path": raw_data_file, "error": str(exc)},
+        ) from exc
     
-    logger.info(f"Loaded {len(raw_sessions)} raw sessions")
+    if not isinstance(raw_sessions, list):
+        raise DataValidationError(
+            f"Expected list in {raw_data_file}, got {type(raw_sessions).__name__}",
+            details={"file_path": raw_data_file},
+        )
+    logger.info("[PHASE_2] Loaded %d raw sessions", len(raw_sessions))
     
     transformed_data = transform_raw_data(raw_sessions, start_date=args.start, end_date=args.end)
     
     with open(temp_transformed_file, 'w') as f:
         json.dump(transformed_data, f, indent=2)
-    logger.info(f"Transformed data saved to {temp_transformed_file}")
+    logger.info("[PHASE_2] Transformed data saved to %s", temp_transformed_file)
     
     config = MetricsConfig(price_per_acu=0.05, currency='USD')
     logger.info(f"Configuration: price_per_acu={config.price_per_acu}, currency={config.currency}")
@@ -352,7 +383,21 @@ if __name__ == '__main__':
     try:
         main()
         print("\n+ SUCCESS: All API data saved and FinOps Summary computed.")
+    except PipelinePhaseError as e:
+        logger.error(
+            "[PIPELINE] Phase '%s' failed: %s | details=%s",
+            e.phase,
+            e,
+            e.details,
+            exc_info=True,
+        )
+        print(f"\n- FAILED [{e.phase}]: {e}")
+        raise
     except Exception as e:
-        logger.error(f"Error generating report: {e}", exc_info=True)
+        logger.error(
+            "[PIPELINE] Unexpected error generating report: %s",
+            e,
+            exc_info=True,
+        )
         print(f"\n- FAILED: {e}")
         raise

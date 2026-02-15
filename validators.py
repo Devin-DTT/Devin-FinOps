@@ -3,8 +3,11 @@ Pydantic Validation Models for FinOps Pipeline.
 Provides input data validation for API parameters, sessions, and user data.
 """
 
+import logging
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class APIRequestParams(BaseModel):
@@ -129,3 +132,85 @@ class EndpointListInput(BaseModel):
         if not v:
             raise ValueError("endpoint_list must contain at least one endpoint")
         return v
+
+
+class RawSessionInput(BaseModel):
+    """Validation model for a single raw session record before transformation."""
+
+    session_id: Optional[str] = Field(default=None, description="Session identifier")
+    user_id: Optional[str] = Field(default=None, description="User identifier")
+    acu_consumed: float = Field(default=0, ge=0, description="ACUs consumed")
+    timestamp: Optional[str] = Field(default=None, description="Session timestamp")
+    task_type: Optional[str] = Field(default=None, description="Type of task")
+    session_outcome: Optional[str] = Field(default=None, description="Session outcome")
+    business_unit: Optional[str] = Field(default=None, description="Business unit")
+
+
+class TransformationInput(BaseModel):
+    """Validation model for transform_raw_data inputs."""
+
+    raw_sessions: List[dict] = Field(description="List of raw session dictionaries")
+    start_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="Start date in YYYY-MM-DD format",
+    )
+    end_date: str = Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+        description="End date in YYYY-MM-DD format",
+    )
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "TransformationInput":
+        if self.start_date > self.end_date:
+            raise ValueError(
+                f"start_date ({self.start_date}) must be before end_date ({self.end_date})"
+            )
+        return self
+
+
+class ExportInput(BaseModel):
+    """Validation model for export function inputs."""
+
+    output_filename: str = Field(
+        min_length=1,
+        description="Output file name",
+    )
+    data_record_count: int = Field(
+        ge=0,
+        description="Number of data records to export",
+    )
+
+
+def validate_raw_sessions(raw_sessions: List[dict]) -> tuple[List[dict], List[dict]]:
+    """
+    Validate a list of raw session dicts, returning valid and invalid records.
+
+    Args:
+        raw_sessions: List of raw session dictionaries.
+
+    Returns:
+        Tuple of (valid_sessions, invalid_sessions).
+    """
+    valid = []
+    invalid = []
+
+    for idx, session in enumerate(raw_sessions):
+        try:
+            RawSessionInput.model_validate(session)
+            valid.append(session)
+        except Exception as exc:
+            logger.warning(
+                "[VALIDATION] Skipping invalid raw session at index %d: %s",
+                idx,
+                exc,
+            )
+            invalid.append({"index": idx, "data": session, "error": str(exc)})
+
+    if invalid:
+        logger.warning(
+            "[VALIDATION] %d of %d raw sessions failed validation",
+            len(invalid),
+            len(raw_sessions),
+        )
+
+    return valid, invalid

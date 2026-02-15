@@ -9,10 +9,17 @@ import logging
 import pandas as pd
 from typing import Dict, Any, List
 from config import MetricsConfig
+from error_handling import (
+    handle_pipeline_phase,
+    DataTransformationError,
+    DataValidationError,
+)
+from validators import TransformationInput, validate_raw_sessions
 
 logger = logging.getLogger(__name__)
 
 
+@handle_pipeline_phase(phase_name="DATA_TRANSFORM", error_cls=DataTransformationError)
 def transform_raw_data(raw_sessions: List[Dict], start_date: str = '2025-01-01', end_date: str = '2025-01-31') -> Dict[str, Any]:
     """
     Transform raw usage data into the format expected by MetricsCalculator.
@@ -24,35 +31,85 @@ def transform_raw_data(raw_sessions: List[Dict], start_date: str = '2025-01-01',
     
     Returns:
         Dictionary with 'sessions', 'user_details', and 'reporting_period' keys
+    
+    Raises:
+        DataValidationError: If input parameters fail validation.
+        DataTransformationError: If transformation logic fails.
     """
-    logger.info(f"Transforming {len(raw_sessions)} raw sessions...")
+    logger.info(
+        "[DATA_TRANSFORM] Received %d raw sessions for period %s to %s",
+        len(raw_sessions),
+        start_date,
+        end_date,
+    )
+
+    try:
+        TransformationInput(
+            raw_sessions=raw_sessions,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        raise DataValidationError(
+            f"Invalid transformation inputs: {exc}",
+            details={"start_date": start_date, "end_date": end_date, "session_count": len(raw_sessions)},
+        ) from exc
+
+    valid_sessions, invalid_sessions = validate_raw_sessions(raw_sessions)
+    if invalid_sessions:
+        logger.warning(
+            "[DATA_TRANSFORM] Proceeding with %d valid sessions (%d rejected)",
+            len(valid_sessions),
+            len(invalid_sessions),
+        )
     
     transformed_sessions = []
     user_departments = {}
     timestamps = []
+    skipped = 0
     
-    for session in raw_sessions:
-        user_id = session.get('user_id', 'unknown')
-        user_email = f"{user_id}@deloitte.com"
-        business_unit = session.get('business_unit', 'Unknown')
-        
-        user_departments[user_email] = business_unit
-        
-        if session.get('timestamp'):
-            timestamps.append(session['timestamp'])
-        
-        acu_consumed = session.get('acu_consumed', 0)
-        duration_minutes = max(1, int(acu_consumed / 5))
-        
-        transformed_session = {
-            'session_id': session.get('session_id', 'unknown'),
-            'user_email': user_email,
-            'duration_minutes': duration_minutes,
-            'acus_consumed': int(acu_consumed),
-            'task_type': session.get('task_type', 'unknown'),
-            'status': session.get('session_outcome', 'unknown')
-        }
-        transformed_sessions.append(transformed_session)
+    for idx, session in enumerate(valid_sessions):
+        try:
+            user_id = session.get('user_id', 'unknown')
+            user_email = f"{user_id}@deloitte.com"
+            business_unit = session.get('business_unit', 'Unknown')
+            
+            user_departments[user_email] = business_unit
+            
+            if session.get('timestamp'):
+                timestamps.append(session['timestamp'])
+            
+            acu_consumed = session.get('acu_consumed', 0)
+            if not isinstance(acu_consumed, (int, float)):
+                logger.warning(
+                    "[DATA_TRANSFORM] Non-numeric acu_consumed at index %d, defaulting to 0",
+                    idx,
+                )
+                acu_consumed = 0
+            duration_minutes = max(1, int(acu_consumed / 5))
+            
+            transformed_session = {
+                'session_id': session.get('session_id', 'unknown'),
+                'user_email': user_email,
+                'duration_minutes': duration_minutes,
+                'acus_consumed': int(acu_consumed),
+                'task_type': session.get('task_type', 'unknown'),
+                'status': session.get('session_outcome', 'unknown')
+            }
+            transformed_sessions.append(transformed_session)
+        except Exception as exc:
+            skipped += 1
+            logger.warning(
+                "[DATA_TRANSFORM] Failed to transform session at index %d: %s",
+                idx,
+                exc,
+            )
+
+    if skipped:
+        logger.warning(
+            "[DATA_TRANSFORM] Skipped %d sessions during transformation",
+            skipped,
+        )
     
     user_details = [
         {
@@ -80,10 +137,15 @@ def transform_raw_data(raw_sessions: List[Dict], start_date: str = '2025-01-01',
         'user_details': user_details
     }
     
-    logger.info(f"Transformation complete: {len(transformed_sessions)} sessions, {len(user_details)} unique users")
+    logger.info(
+        "[DATA_TRANSFORM] Transformation complete: %d sessions, %d unique users",
+        len(transformed_sessions),
+        len(user_details),
+    )
     return transformed_data
 
 
+@handle_pipeline_phase(phase_name="DATA_TRANSFORM", error_cls=DataTransformationError)
 def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = 'api_health_report.csv') -> None:
     """
     Create a CSV summary of API health check results.
@@ -91,11 +153,27 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     Args:
         raw_data: Dictionary of API results from fetch_api_data()
         output_file: Output CSV filename
-    """
-    logger.info(f"Creating API health report CSV with {len(raw_data)} endpoints...")
     
+    Raises:
+        DataTransformationError: If CSV creation fails.
+    """
+    logger.info(
+        "[DATA_TRANSFORM] Creating API health report CSV with %d endpoints",
+        len(raw_data),
+    )
+    
+    if not raw_data:
+        logger.warning("[DATA_TRANSFORM] No API data provided for health report CSV")
+        return
+
     rows = []
     for endpoint_name, endpoint_data in raw_data.items():
+        if not isinstance(endpoint_data, dict):
+            logger.warning(
+                "[DATA_TRANSFORM] Skipping non-dict entry for endpoint '%s'",
+                endpoint_name,
+            )
+            continue
         row = {
             'endpoint_name': endpoint_name,
             'full_url': endpoint_data.get('full_url', ''),
@@ -107,9 +185,9 @@ def create_summary_csv(raw_data: Dict[str, Dict[str, Any]], output_file: str = '
     df = pd.DataFrame(rows)
     df.to_csv(output_file, index=False)
     
-    logger.info(f"API health report saved to {output_file}")
-    logger.info(f"  - Total endpoints: {len(rows)}")
-    logger.info("  - Columns: endpoint_name, full_url, status_code, timestamp")
+    logger.info("[DATA_TRANSFORM] API health report saved to %s", output_file)
+    logger.info("[DATA_TRANSFORM]   - Total endpoints: %d", len(rows))
+    logger.info("[DATA_TRANSFORM]   - Columns: endpoint_name, full_url, status_code, timestamp")
 
 
 def generate_business_summary(consumption_data: Dict[str, Any], config: MetricsConfig, all_api_data: Dict[str, Dict[str, Any]] = None) -> Dict[str, Any]:

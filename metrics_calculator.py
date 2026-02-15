@@ -10,6 +10,11 @@ from collections import defaultdict
 
 from config import MetricsConfig
 from validators import UsageData
+from error_handling import (
+    handle_pipeline_phase,
+    MetricsCalculationError,
+    DataValidationError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,20 +46,39 @@ class MetricsCalculator:
             json_file_path: Path to the raw_usage_data.json file
 
         Raises:
-            FileNotFoundError: If the file doesn't exist
-            json.JSONDecodeError: If the file is not valid JSON
-            ValidationError: If the data fails Pydantic validation
+            DataValidationError: If the file cannot be read or data fails validation.
         """
-        logger.info(f"Loading data from {json_file_path}")
-        with open(json_file_path, 'r') as f:
-            raw = json.load(f)
+        logger.info("[CALCULATE] Loading data from %s", json_file_path)
+        try:
+            with open(json_file_path, 'r') as f:
+                raw = json.load(f)
+        except FileNotFoundError as exc:
+            raise DataValidationError(
+                f"Data file not found: {json_file_path}",
+                details={"file_path": json_file_path},
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise DataValidationError(
+                f"Invalid JSON in data file: {json_file_path}",
+                details={"file_path": json_file_path, "error": str(exc)},
+            ) from exc
 
-        validated = UsageData.model_validate(raw)
+        try:
+            validated = UsageData.model_validate(raw)
+        except Exception as exc:
+            raise DataValidationError(
+                f"Data validation failed for {json_file_path}: {exc}",
+                details={"file_path": json_file_path, "error": str(exc)},
+            ) from exc
 
         self.data = raw
         self.sessions = [s.model_dump() for s in validated.sessions]
         self.users = [u.model_dump() for u in validated.user_details]
-        logger.info(f"Data loaded and validated: {len(self.sessions)} sessions, {len(self.users)} users")
+        logger.info(
+            "[CALCULATE] Data loaded and validated: %d sessions, %d users",
+            len(self.sessions),
+            len(self.users),
+        )
 
     def calculate_total_monthly_cost(self) -> float:
         """
@@ -351,37 +375,75 @@ class MetricsCalculator:
 
         Returns:
             Dictionary containing all calculated metrics
+
+        Raises:
+            MetricsCalculationError: If any metric calculation fails.
         """
-        logger.info("Starting calculation of all metrics")
+        logger.info("[CALCULATE] Starting calculation of all 20 metrics")
+
+        if self.data is None:
+            raise MetricsCalculationError(
+                "No data loaded. Call load_data() before calculate_all_metrics().",
+                details={"sessions": 0, "users": 0},
+            )
+
+        metric_methods = [
+            ('01_total_monthly_cost', self.calculate_total_monthly_cost),
+            ('02_total_acus', self.calculate_total_acus),
+            ('03_cost_per_user', self.calculate_cost_per_user),
+            ('04_acus_per_session', self.calculate_acus_per_session),
+            ('05_average_acus_per_session', self.calculate_average_acus_per_session),
+            ('06_total_sessions', self.calculate_total_sessions),
+            ('07_sessions_per_user', self.calculate_sessions_per_user),
+            ('08_total_duration_minutes', self.calculate_total_duration_minutes),
+            ('09_average_session_duration', self.calculate_average_session_duration),
+            ('10_acus_per_minute', self.calculate_acus_per_minute),
+            ('11_cost_per_minute', self.calculate_cost_per_minute),
+            ('12_unique_users', self.calculate_unique_users),
+            ('13_sessions_by_task_type', self.calculate_sessions_by_task_type),
+            ('14_acus_by_task_type', self.calculate_acus_by_task_type),
+            ('15_cost_by_task_type', self.calculate_cost_by_task_type),
+            ('16_sessions_by_department', self.calculate_sessions_by_department),
+            ('17_acus_by_department', self.calculate_acus_by_department),
+            ('18_cost_by_department', self.calculate_cost_by_department),
+            ('19_average_cost_per_user', self.calculate_average_cost_per_user),
+            ('20_efficiency_ratio', self.calculate_efficiency_ratio),
+        ]
+
+        metrics = {}
+        failed_metrics = []
+
+        for metric_key, method in metric_methods:
+            try:
+                metrics[metric_key] = method()
+            except Exception as exc:
+                logger.error(
+                    "[CALCULATE] Failed to calculate metric '%s': %s",
+                    metric_key,
+                    exc,
+                )
+                failed_metrics.append(metric_key)
+                metrics[metric_key] = None
+
+        if failed_metrics:
+            logger.warning(
+                "[CALCULATE] %d of %d metrics failed: %s",
+                len(failed_metrics),
+                len(metric_methods),
+                ", ".join(failed_metrics),
+            )
 
         metrics_result = {
             'config': self.config.to_dict(),
             'reporting_period': self.data.get('reporting_period', {}),
-            'metrics': {
-                '01_total_monthly_cost': self.calculate_total_monthly_cost(),
-                '02_total_acus': self.calculate_total_acus(),
-                '03_cost_per_user': self.calculate_cost_per_user(),
-                '04_acus_per_session': self.calculate_acus_per_session(),
-                '05_average_acus_per_session': self.calculate_average_acus_per_session(),
-                '06_total_sessions': self.calculate_total_sessions(),
-                '07_sessions_per_user': self.calculate_sessions_per_user(),
-                '08_total_duration_minutes': self.calculate_total_duration_minutes(),
-                '09_average_session_duration': self.calculate_average_session_duration(),
-                '10_acus_per_minute': self.calculate_acus_per_minute(),
-                '11_cost_per_minute': self.calculate_cost_per_minute(),
-                '12_unique_users': self.calculate_unique_users(),
-                '13_sessions_by_task_type': self.calculate_sessions_by_task_type(),
-                '14_acus_by_task_type': self.calculate_acus_by_task_type(),
-                '15_cost_by_task_type': self.calculate_cost_by_task_type(),
-                '16_sessions_by_department': self.calculate_sessions_by_department(),
-                '17_acus_by_department': self.calculate_acus_by_department(),
-                '18_cost_by_department': self.calculate_cost_by_department(),
-                '19_average_cost_per_user': self.calculate_average_cost_per_user(),
-                '20_efficiency_ratio': self.calculate_efficiency_ratio()
-            }
+            'metrics': metrics,
         }
 
-        logger.info("Metrics calculation complete")
+        logger.info(
+            "[CALCULATE] Metrics calculation complete: %d succeeded, %d failed",
+            len(metric_methods) - len(failed_metrics),
+            len(failed_metrics),
+        )
         return metrics_result
 
 
