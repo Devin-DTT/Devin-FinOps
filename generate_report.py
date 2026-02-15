@@ -13,16 +13,16 @@ import json
 import logging
 import argparse
 from typing import Dict, Any
-from metrics_calculator import MetricsCalculator
+from metrics_engine import (
+    MetricsCalculator,
+    calculate_monthly_acus_from_daily,
+    extract_base_metrics,
+    calculate_finops_metrics,
+)
 from config import MetricsConfig
 import data_adapter
 from export_metrics import export_daily_acus_to_csv
 from export_metrics_summary import export_summary_to_excel
-from metrics_service import (
-    calculate_monthly_acus,
-    calculate_base_metrics,
-    calculate_finops_metrics,
-)
 from data_transformer import (
     transform_raw_data,
     create_summary_csv,
@@ -308,7 +308,7 @@ def main():
     logger.info(f"Organization aggregation complete: {len(org_breakdown_summary)} organizations")
     
     logger.info("Calculating base metrics with traceability...")
-    base_data = calculate_base_metrics(all_api_data, config)
+    base_data = extract_base_metrics(all_api_data, config)
     logger.info(f"Base metrics calculated: {len(base_data)} metrics")
     
     logger.info("Calculating FinOps metrics with traceability...")
@@ -332,7 +332,7 @@ def main():
                 unique_months.add(month_prefix)
         
         for month_prefix in sorted(unique_months):
-            monthly_acus = calculate_monthly_acus(consumption_by_date, month_prefix)
+            monthly_acus = calculate_monthly_acus_from_daily(consumption_by_date, month_prefix)
             monthly_consumption_history.append({
                 'Mes': month_prefix,
                 'Consumo Total (ACUs)': round(monthly_acus, 2)
