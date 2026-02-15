@@ -67,6 +67,12 @@ def main():
         default='2025-10-31',
         help='End date for reporting period (YYYY-MM-DD)'
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        default=False,
+        help='Persist intermediate files for debugging (raw_usage_data.json, transformed_usage_data.json, all_raw_api_data.json)'
+    )
     args = parser.parse_args()
     
     data_adapter.setup_logging()
@@ -161,7 +167,8 @@ def main():
     
     try:
         all_api_data = data_adapter.fetch_api_data(API_ENDPOINTS, params_by_endpoint=params_by_endpoint)
-        data_adapter.save_raw_data(all_api_data)
+        if args.debug:
+            data_adapter.save_raw_data(all_api_data)
         create_summary_csv(all_api_data)
         logger.info("Multi-endpoint data fetch completed successfully")
         
@@ -191,33 +198,31 @@ def main():
         logger.info("Continuing with report generation using existing data if available")
     
     logger.info("Fetching data from Cognition API...")
+    raw_sessions = None
     try:
-        data_adapter.main(start_date=args.start, end_date=args.end)
+        raw_sessions = data_adapter.main(start_date=args.start, end_date=args.end, persist=args.debug)
     except Exception as e:
         logger.error(f"Failed to fetch data from API: {e}")
-        logger.info("Attempting to use existing raw_usage_data.json if available")
+        logger.info("Continuing with empty session data")
 
-    raw_data_file = 'raw_usage_data.json'
-    temp_transformed_file = 'transformed_usage_data.json'
+    if raw_sessions is None:
+        raw_sessions = []
     
-    logger.info(f"Loading raw data from {raw_data_file}...")
-    with open(raw_data_file, 'r') as f:
-        raw_sessions = json.load(f)
-    
-    logger.info(f"Loaded {len(raw_sessions)} raw sessions")
+    logger.info(f"Loaded {len(raw_sessions)} raw sessions (in-memory)")
     
     transformed_data = transform_raw_data(raw_sessions, start_date=args.start, end_date=args.end)
     
-    with open(temp_transformed_file, 'w') as f:
-        json.dump(transformed_data, f, indent=2)
-    logger.info(f"Transformed data saved to {temp_transformed_file}")
+    if args.debug:
+        with open('transformed_usage_data.json', 'w') as f:
+            json.dump(transformed_data, f, indent=2)
+        logger.info("Debug: Transformed data saved to transformed_usage_data.json")
     
     config = MetricsConfig(price_per_acu=0.05, currency='USD')
     logger.info(f"Configuration: price_per_acu={config.price_per_acu}, currency={config.currency}")
     
     calculator = MetricsCalculator(config)
-    calculator.load_data(temp_transformed_file)
-    logger.info("Data loaded into MetricsCalculator")
+    calculator.load_data_from_dict(transformed_data)
+    logger.info("Data loaded into MetricsCalculator (in-memory)")
     
     logger.info("Calculating all 20 metrics...")
     all_metrics = calculator.calculate_all_metrics()
@@ -319,7 +324,7 @@ def main():
     
     summary_data = generate_business_summary(all_metrics, config, all_api_data)
     
-    export_daily_acus_to_csv()
+    export_daily_acus_to_csv(raw_data=raw_sessions)
     
     monthly_consumption_history = []
     consumption_by_date = base_data.get('consumption_by_date', {}).get('value', {})

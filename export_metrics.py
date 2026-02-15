@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def export_daily_acus_to_csv(
+    raw_data: List[Dict[str, Any]] = None,
     raw_data_file: str = 'raw_usage_data.json',
     output_filename: str = 'daily_consumption_data.csv'
 ) -> None:
@@ -20,17 +21,19 @@ def export_daily_acus_to_csv(
     Export daily ACU consumption data to CSV format.
     
     Args:
-        raw_data_file: Path to raw usage data JSON file
+        raw_data: In-memory list of usage records (preferred over file)
+        raw_data_file: Fallback path to raw usage data JSON file
         output_filename: Output CSV filename
     """
     logger.info(f"Exporting daily consumption data to {output_filename}...")
     
     try:
-        with open(raw_data_file, 'r') as f:
-            raw_data = json.load(f)
+        if raw_data is None:
+            with open(raw_data_file, 'r') as f:
+                raw_data = json.load(f)
         
         if not raw_data:
-            logger.warning("No consumption data found in raw_usage_data.json")
+            logger.warning("No consumption data available for CSV export")
             return
         
         rows = []

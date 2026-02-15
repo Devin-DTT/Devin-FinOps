@@ -443,8 +443,18 @@ def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.jso
         raise
 
 
-def main(start_date: Optional[str] = None, end_date: Optional[str] = None):
-    """Main execution function for data adapter."""
+def main(start_date: Optional[str] = None, end_date: Optional[str] = None, persist: bool = False) -> Optional[List[Dict[str, Any]]]:
+    """
+    Main execution function for data adapter.
+
+    Args:
+        start_date: Start date filter (YYYY-MM-DD)
+        end_date: End date filter (YYYY-MM-DD)
+        persist: If True, write raw data to raw_usage_data.json for debugging
+
+    Returns:
+        List of fetched usage data records, or None on failure
+    """
     from datetime import timedelta
 
     setup_logging()
@@ -472,17 +482,18 @@ def main(start_date: Optional[str] = None, end_date: Optional[str] = None):
     try:
         data = fetch_cognition_data(start_date=start_date, end_date=end_date)
 
-        write_raw_data(data)
+        if persist:
+            write_raw_data(data)
 
         logger.info("=" * 60)
         logger.info("Data adapter completed successfully")
         logger.info("=" * 60)
 
-        return True
+        return data
 
     except Exception as e:
         logger.error(f"Data adapter failed: {e}", exc_info=True)
-        return False
+        return None
 
 
 if __name__ == '__main__':

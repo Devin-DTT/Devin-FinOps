@@ -49,9 +49,21 @@ class MetricsCalculator:
         with open(json_file_path, 'r') as f:
             raw = json.load(f)
 
-        validated = UsageData.model_validate(raw)
+        self.load_data_from_dict(raw)
 
-        self.data = raw
+    def load_data_from_dict(self, data: dict) -> None:
+        """
+        Load and validate usage data from an in-memory dictionary.
+
+        Args:
+            data: Dictionary containing usage data with sessions and user_details
+
+        Raises:
+            ValidationError: If the data fails Pydantic validation
+        """
+        validated = UsageData.model_validate(data)
+
+        self.data = data
         self.sessions = [s.model_dump() for s in validated.sessions]
         self.users = [u.model_dump() for u in validated.user_details]
         logger.info(f"Data loaded and validated: {len(self.sessions)} sessions, {len(self.users)} users")
