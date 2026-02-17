@@ -143,12 +143,13 @@ def calculate_adoption_kpis(
         cat,
     )
 
-    pr_success_rate = round(_safe_div(prs_merged, prs_opened) * 100, 2) if prs_opened else 0
+    pr_success_raw = round(_safe_div(prs_merged, prs_opened) * 100, 2) if prs_opened else 0
+    pr_success_rate = min(pr_success_raw, 100.0)
     kpis["Devin PR success rate"] = _metric(
         pr_success_rate,
-        "prs_merged / prs_opened * 100 (in same window)",
+        "min(prs_merged / prs_opened * 100, 100) (in same window)",
         [
-            {"source_path": "GET /v2/enterprise/metrics/prs", "raw_value": {"opened": prs_opened, "merged": prs_merged}},
+            {"source_path": "GET /v2/enterprise/metrics/prs", "raw_value": {"opened": prs_opened, "merged": prs_merged, "raw_pct": pr_success_raw}},
         ],
         cat,
     )
