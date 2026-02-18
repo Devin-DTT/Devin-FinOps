@@ -14,9 +14,11 @@ from typing import Dict, List, Any, Optional, Tuple
 
 import requests
 
-from error_handling import handle_api_errors, APIError
+from error_handling import handle_api_errors, APIError, AuthenticationError
 
 logger = logging.getLogger(__name__)
+
+_forbidden_repos: set = set()
 
 GITHUB_API_BASE = "https://api.github.com"
 
@@ -258,16 +260,30 @@ def fetch_all_pr_data(pr_urls: List[str]) -> Dict[str, Dict[str, Any]]:
             continue
 
         owner, repo, pull_number = parsed
-        pr_key = f"{owner}/{repo}#{pull_number}"
+        repo_key = f"{owner}/{repo}"
+        pr_key = f"{repo_key}#{pull_number}"
+
+        if repo_key in _forbidden_repos:
+            logger.info("Skipping %s (repo previously returned 403)", pr_key)
+            continue
+
         logger.info("Fetching GitHub data for %s", pr_key)
 
         pr_data: Dict[str, Any] = {"url": pr_url, "owner": owner, "repo": repo, "pull_number": pull_number}
 
         try:
             pr_data["details"] = fetch_pr_details(owner, repo, pull_number)
+        except AuthenticationError:
+            logger.warning("No access to %s, skipping remaining calls", repo_key)
+            _forbidden_repos.add(repo_key)
+            pr_data["details"] = {}
+            results[pr_url] = pr_data
+            continue
         except Exception as e:
             logger.warning("Failed to fetch PR details for %s: %s", pr_key, e)
             pr_data["details"] = {}
+            results[pr_url] = pr_data
+            continue
 
         try:
             pr_data["reviews"] = fetch_pr_reviews(owner, repo, pull_number)
