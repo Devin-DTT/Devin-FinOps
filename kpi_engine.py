@@ -169,12 +169,24 @@ def calculate_adoption_kpis(
                 merged_count += 1
                 break
 
-    acu_per_merged_pr = round(_safe_div(merged_pr_acus, merged_count), 2)
+    if merged_count > 0:
+        acu_per_merged_pr = round(_safe_div(merged_pr_acus, merged_count), 2)
+        source_desc = "GET /v2/enterprise/sessions + GitHub PR merged_at"
+        source_raw = {"acus": round(merged_pr_acus, 2), "merged_count": merged_count, "method": "github_match"}
+    elif prs_merged > 0:
+        acu_per_merged_pr = round(_safe_div(total_acus, prs_merged), 2)
+        source_desc = "GET /v2/enterprise/metrics/prs (fallback: total_acus / prs_merged)"
+        source_raw = {"acus": round(total_acus, 2), "merged_count": prs_merged, "method": "devin_api_fallback"}
+    else:
+        acu_per_merged_pr = 0
+        source_desc = "No merged PRs found"
+        source_raw = {"acus": 0, "merged_count": 0, "method": "none"}
+
     kpis["ACU per merged PR"] = _metric(
         acu_per_merged_pr,
         "sum(acus_consumed for sessions with >=1 merged PR) / count(merged PRs)",
         [
-            {"source_path": "GET /v2/enterprise/sessions + GitHub PR merged_at", "raw_value": {"acus": round(merged_pr_acus, 2), "merged_count": merged_count}},
+            {"source_path": source_desc, "raw_value": source_raw},
         ],
         cat,
     )
