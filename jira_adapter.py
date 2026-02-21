@@ -2,12 +2,18 @@
 Jira REST API Adapter for KPI Metrics.
 
 Provides functions to fetch Jira issues and changelogs for traceability
-and cycle-time calculations. Uses environment variables for configuration:
-  JIRA_BASE_URL  - e.g. https://yourorg.atlassian.net
-  JIRA_EMAIL     - Jira user email
-  JIRA_API_TOKEN - Jira API token
+and cycle-time calculations. Supports two data sources:
+
+1. Direct REST API (requires env vars):
+     JIRA_BASE_URL  - e.g. https://yourorg.atlassian.net
+     JIRA_EMAIL     - Jira user email
+     JIRA_API_TOKEN - Jira API token
+
+2. MCP cache file (fallback when REST API not configured):
+     JIRA_MCP_CACHE - path to a JSON file pre-fetched via Atlassian MCP
 """
 
+import json
 import os
 import re
 import logging
@@ -200,17 +206,43 @@ def check_reopen(
     return False
 
 
+def _load_mcp_cache() -> Dict[str, Dict[str, Any]]:
+    """Load Jira data from an MCP-fetched cache file (JIRA_MCP_CACHE env var)."""
+    cache_path = os.getenv("JIRA_MCP_CACHE", "")
+    if not cache_path:
+        return {}
+
+    try:
+        with open(cache_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        logger.info("Loaded %d issues from Jira MCP cache: %s", len(data), cache_path)
+        return data
+    except Exception as e:
+        logger.warning("Failed to load Jira MCP cache from %s: %s", cache_path, e)
+        return {}
+
+
 def fetch_jira_data_for_keys(jira_keys: List[str]) -> Dict[str, Dict[str, Any]]:
     """Fetch issue details and changelog for a list of Jira keys.
 
     Returns dict keyed by issue key with 'issue' and 'changelog' sub-dicts.
+    Tries REST API first, falls back to MCP cache file if configured.
     """
     base_url, email, api_token = _resolve_jira_config()
     if not base_url:
-        logger.info("Jira not configured, skipping Jira data fetch")
+        mcp_cache = _load_mcp_cache()
+        if mcp_cache:
+            results: Dict[str, Dict[str, Any]] = {}
+            for key in jira_keys:
+                if key in mcp_cache:
+                    results[key] = mcp_cache[key]
+                    logger.info("Loaded Jira data for %s from MCP cache", key)
+            logger.info("Loaded %d/%d Jira issues from MCP cache", len(results), len(jira_keys))
+            return results
+        logger.info("Jira not configured and no MCP cache, skipping Jira data fetch")
         return {}
 
-    results: Dict[str, Dict[str, Any]] = {}
+    results = {}
     for key in jira_keys:
         logger.info("Fetching Jira data for %s", key)
         issue = fetch_jira_issue(key)
