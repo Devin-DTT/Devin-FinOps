@@ -422,6 +422,84 @@ def fetch_user_organization_mappings(user_ids: List[str]) -> Dict[str, Any]:
     return user_org_mappings
 
 
+def fetch_sessions_list(
+    created_date_from: Optional[str] = None,
+    created_date_to: Optional[str] = None,
+    api_key: Optional[str] = None,
+    page_size: int = 50,
+    max_pages: int = 100,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch paginated sessions list from the Devin Enterprise API.
+
+    This endpoint returns session details including pull_requests URLs,
+    status, user_id, and acus_consumed which are needed for KPI calculations.
+
+    Args:
+        created_date_from: Filter start date (YYYY-MM-DD)
+        created_date_to: Filter end date (YYYY-MM-DD)
+        api_key: API key (defaults to DEVIN_ENTERPRISE_API_KEY env var)
+        page_size: Number of sessions per page
+        max_pages: Maximum pages to fetch
+
+    Returns:
+        List of session dictionaries
+    """
+    resolved_key = _resolve_api_key(api_key)
+    headers = _build_headers(resolved_key)
+    base_url = "https://api.devin.ai/v2/enterprise/sessions"
+
+    all_sessions: List[Dict[str, Any]] = []
+    offset = 0
+    page_count = 0
+
+    while page_count < max_pages:
+        page_count += 1
+        params: Dict[str, Any] = {
+            "offset": offset,
+            "limit": page_size,
+        }
+        if created_date_from:
+            params["created_date_from"] = created_date_from
+        if created_date_to:
+            params["created_date_to"] = created_date_to
+
+        logger.info("Fetching sessions page %d (offset=%d)", page_count, offset)
+
+        try:
+            response = _fetch_single_endpoint(base_url, headers, params)
+            if response.status_code != 200:
+                logger.warning("Sessions list returned status %d", response.status_code)
+                break
+
+            data = response.json()
+
+            if isinstance(data, list):
+                sessions = data
+            elif isinstance(data, dict):
+                sessions = data.get("sessions", data.get("data", data.get("items", [])))
+            else:
+                break
+
+            if not sessions:
+                break
+
+            all_sessions.extend(sessions)
+            logger.info("  + Page %d: %d sessions fetched", page_count, len(sessions))
+
+            if len(sessions) < page_size:
+                break
+
+            offset += page_size
+
+        except Exception as e:
+            logger.error("Failed to fetch sessions page %d: %s", page_count, e)
+            break
+
+    logger.info("Sessions list fetch complete: %d total sessions from %d pages", len(all_sessions), page_count)
+    return all_sessions
+
+
 def save_raw_data(data: Dict[str, Any], output_file: str = 'all_raw_api_data.json') -> None:
     """
     Save API results dictionary to JSON file.
