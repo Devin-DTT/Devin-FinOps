@@ -4,6 +4,7 @@ import com.devin.finops.config.MetricsProperties;
 import com.devin.finops.model.ConsumptionData;
 import com.devin.finops.model.MetricsResult;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -15,8 +16,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for MetricsService covering all 20 foundational metrics.
+ * Mirrors Python test coverage from tests/test_metrics_calculator.py.
  */
 class MetricsServiceTest {
+
+    // =========================================================================
+    // BASIC METRICS TESTS (equivalent to Python TestMetricsCalculatorBasic)
+    // =========================================================================
 
     private MetricsService metricsService;
     private List<ConsumptionData> testSessions;
@@ -332,5 +338,508 @@ class MetricsServiceTest {
         assertTrue(metricsService.calculateSessionsByDepartment(empty).isEmpty());
         assertTrue(metricsService.calculateAcusByDepartment(empty).isEmpty());
         assertTrue(metricsService.calculateCostByDepartment(empty).isEmpty());
+    }
+
+    @Test
+    void testCalculateAllMetricsValues() {
+        // Equivalent to Python test_calculate_all_metrics_values
+        MetricsResult result = metricsService.calculateAllMetrics(
+                testSessions, "2025-10-01", "2025-10-31");
+        Map<String, Object> m = result.getMetrics();
+
+        assertEquals(21.25, (double) m.get("01_total_monthly_cost"), 0.01);
+        assertEquals(425.0, (double) m.get("02_total_acus"), 0.01);
+        assertEquals(4, m.get("06_total_sessions"));
+        assertEquals(3, m.get("12_unique_users"));
+    }
+
+    @Test
+    void testCalculateAllMetricsNullDates() {
+        MetricsResult result = metricsService.calculateAllMetrics(testSessions, null, null);
+        assertNotNull(result);
+        assertEquals("N/A", result.getReportingPeriod().get("start_date"));
+        assertEquals("N/A", result.getReportingPeriod().get("end_date"));
+    }
+
+    // =========================================================================
+    // EMPTY DATA TESTS (equivalent to Python TestMetricsCalculatorEmptyData)
+    // =========================================================================
+
+    @Nested
+    class EmptyDataTests {
+
+        private MetricsService emptyService;
+        private List<ConsumptionData> emptySessions;
+
+        @BeforeEach
+        void setUp() {
+            MetricsProperties config = new MetricsProperties();
+            config.setPricePerAcu(0.10);
+            config.setCurrency("USD");
+            emptyService = new MetricsService(config);
+            emptySessions = List.of();
+        }
+
+        @Test
+        void testEmptyTotalAcus() {
+            assertEquals(0.0, emptyService.calculateTotalAcus(emptySessions));
+        }
+
+        @Test
+        void testEmptyTotalMonthlyCost() {
+            assertEquals(0.0, emptyService.calculateTotalMonthlyCost(emptySessions));
+        }
+
+        @Test
+        void testEmptyTotalSessions() {
+            assertEquals(0, emptyService.calculateTotalSessions(emptySessions));
+        }
+
+        @Test
+        void testEmptyUniqueUsers() {
+            assertEquals(0, emptyService.calculateUniqueUsers(emptySessions));
+        }
+
+        @Test
+        void testEmptyAverageAcusPerSession() {
+            assertEquals(0.0, emptyService.calculateAverageAcusPerSession(emptySessions));
+        }
+
+        @Test
+        void testEmptyAverageSessionDuration() {
+            assertEquals(0.0, emptyService.calculateAverageSessionDuration(emptySessions));
+        }
+
+        @Test
+        void testEmptyAcusPerMinute() {
+            assertEquals(0.0, emptyService.calculateAcusPerMinute(emptySessions));
+        }
+
+        @Test
+        void testEmptyCostPerMinute() {
+            assertEquals(0.0, emptyService.calculateCostPerMinute(emptySessions));
+        }
+
+        @Test
+        void testEmptyAverageCostPerUser() {
+            assertEquals(0.0, emptyService.calculateAverageCostPerUser(emptySessions));
+        }
+
+        @Test
+        void testEmptyEfficiencyRatio() {
+            assertEquals(0.0, emptyService.calculateEfficiencyRatio(emptySessions));
+        }
+
+        @Test
+        void testEmptyCostPerUser() {
+            assertTrue(emptyService.calculateCostPerUser(emptySessions).isEmpty());
+        }
+
+        @Test
+        void testEmptySessionsPerUser() {
+            assertTrue(emptyService.calculateSessionsPerUser(emptySessions).isEmpty());
+        }
+
+        @Test
+        void testEmptySessionsByTaskType() {
+            assertTrue(emptyService.calculateSessionsByTaskType(emptySessions).isEmpty());
+        }
+
+        @Test
+        void testEmptySessionsByDepartment() {
+            assertTrue(emptyService.calculateSessionsByDepartment(emptySessions).isEmpty());
+        }
+
+        @Test
+        void testEmptyTotalDuration() {
+            assertEquals(0, emptyService.calculateTotalDurationMinutes(emptySessions));
+        }
+    }
+
+    // =========================================================================
+    // CUSTOM CONFIG TESTS (equivalent to Python TestMetricsCalculatorCustomConfig)
+    // =========================================================================
+
+    @Nested
+    class CustomConfigTests {
+
+        private List<ConsumptionData> singleSession;
+
+        @BeforeEach
+        void setUp() {
+            singleSession = List.of(new ConsumptionData(
+                    "s1", "dev_001", "org_001", "proj_001", null,
+                    "2025-10-01T10:00:00", 600.0, "Platform", "code_review",
+                    false, true, "Success"
+            ));
+        }
+
+        @Test
+        void testDefaultConfig() {
+            MetricsProperties defaultConfig = new MetricsProperties();
+            // default pricePerAcu = 0.05
+            MetricsService defaultService = new MetricsService(defaultConfig);
+            assertEquals(600.0 * 0.05, defaultService.calculateTotalMonthlyCost(singleSession), 0.01);
+        }
+
+        @Test
+        void testCustomPricePerAcu() {
+            MetricsProperties customConfig = new MetricsProperties();
+            customConfig.setPricePerAcu(0.25);
+            customConfig.setCurrency("EUR");
+            MetricsService customService = new MetricsService(customConfig);
+            assertEquals(150.0, customService.calculateTotalMonthlyCost(singleSession), 0.01);
+        }
+
+        @Test
+        void testConfigPropertiesInResult() {
+            MetricsProperties customConfig = new MetricsProperties();
+            customConfig.setPricePerAcu(0.08);
+            customConfig.setCurrency("GBP");
+            customConfig.setWorkingHoursPerDay(7);
+            customConfig.setWorkingDaysPerMonth(20);
+            MetricsService customService = new MetricsService(customConfig);
+
+            MetricsResult result = customService.calculateAllMetrics(
+                    singleSession, "2025-10-01", "2025-10-31");
+
+            assertEquals(0.08, result.getConfig().get("price_per_acu"));
+            assertEquals("GBP", result.getConfig().get("currency"));
+            assertEquals(7, result.getConfig().get("working_hours_per_day"));
+            assertEquals(20, result.getConfig().get("working_days_per_month"));
+        }
+
+        @Test
+        void testCostScalesLinearly() {
+            // Equivalent to Python test_cost_scales_linearly
+            double[] prices = {0.01, 0.10, 1.00};
+            double[] costs = new double[3];
+
+            for (int i = 0; i < prices.length; i++) {
+                MetricsProperties cfg = new MetricsProperties();
+                cfg.setPricePerAcu(prices[i]);
+                MetricsService svc = new MetricsService(cfg);
+                costs[i] = svc.calculateTotalMonthlyCost(singleSession);
+            }
+
+            assertEquals(10.0, costs[1] / costs[0], 0.01);
+            assertEquals(10.0, costs[2] / costs[1], 0.01);
+        }
+    }
+
+    // =========================================================================
+    // SINGLE USER TESTS (equivalent to Python TestMetricsCalculatorSingleUser)
+    // =========================================================================
+
+    @Nested
+    class SingleUserTests {
+
+        private MetricsService singleUserService;
+        private List<ConsumptionData> singleUserSessions;
+
+        @BeforeEach
+        void setUp() {
+            MetricsProperties config = new MetricsProperties();
+            config.setPricePerAcu(0.05);
+            singleUserService = new MetricsService(config);
+
+            singleUserSessions = new ArrayList<>();
+            String[] taskTypes = {"testing", "deployment", "testing", "deployment"};
+            for (int i = 0; i < 4; i++) {
+                singleUserSessions.add(new ConsumptionData(
+                        "s" + i, "solo_user", "org_001", "proj_001", null,
+                        "2025-10-01T10:00:00", 100.0, "DevOps", taskTypes[i],
+                        false, true, "Success"
+                ));
+            }
+        }
+
+        @Test
+        void testSingleUserUniqueCount() {
+            assertEquals(1, singleUserService.calculateUniqueUsers(singleUserSessions));
+        }
+
+        @Test
+        void testSingleUserSessions() {
+            Map<String, Integer> sessions = singleUserService.calculateSessionsPerUser(singleUserSessions);
+            assertEquals(4, sessions.get("solo_user@deloitte.com"));
+        }
+
+        @Test
+        void testSingleUserTotalAcus() {
+            assertEquals(400.0, singleUserService.calculateTotalAcus(singleUserSessions), 0.01);
+        }
+
+        @Test
+        void testSingleUserAverageCostEqualsTotal() {
+            double total = singleUserService.calculateTotalMonthlyCost(singleUserSessions);
+            double avg = singleUserService.calculateAverageCostPerUser(singleUserSessions);
+            assertEquals(total, avg, 0.01);
+        }
+
+        @Test
+        void testSingleUserDepartmentSessions() {
+            Map<String, Integer> dept = singleUserService.calculateSessionsByDepartment(singleUserSessions);
+            assertEquals(4, dept.get("DevOps"));
+        }
+
+        @Test
+        void testTaskTypeDistribution() {
+            Map<String, Integer> tasks = singleUserService.calculateSessionsByTaskType(singleUserSessions);
+            assertEquals(2, tasks.get("testing"));
+            assertEquals(2, tasks.get("deployment"));
+        }
+
+        @Test
+        void testEfficiencyRatioSingleUser() {
+            // Each session: max(1, 100/5) = 20 min, total = 80 min, hours = 80/60
+            // Efficiency = 400 / (80/60) = 300.0
+            double ratio = singleUserService.calculateEfficiencyRatio(singleUserSessions);
+            double totalHours = 80.0 / 60.0;
+            assertEquals(400.0 / totalHours, ratio, 0.1);
+        }
+    }
+
+    // =========================================================================
+    // MISSING / NULL FIELDS TESTS (equivalent to Python TestMetricsCalculatorMissingFields)
+    // =========================================================================
+
+    @Nested
+    class MissingFieldsTests {
+
+        private MetricsService missingFieldsService;
+        private List<ConsumptionData> sessionsWithNulls;
+
+        @BeforeEach
+        void setUp() {
+            MetricsProperties config = new MetricsProperties();
+            config.setPricePerAcu(0.10);
+            missingFieldsService = new MetricsService(config);
+
+            sessionsWithNulls = new ArrayList<>();
+
+            // Session with null taskType and null businessUnit
+            ConsumptionData s1 = new ConsumptionData();
+            s1.setSessionId("s1");
+            s1.setUserId("user_x");
+            s1.setAcuConsumed(0.0); // missing/zero ACUs
+            // taskType = null, businessUnit = null
+
+            ConsumptionData s2 = new ConsumptionData();
+            s2.setSessionId("s2");
+            s2.setUserId("user_x");
+            s2.setAcuConsumed(200.0);
+            s2.setTaskType("Feature");
+            s2.setBusinessUnit("Engineering");
+
+            sessionsWithNulls.add(s1);
+            sessionsWithNulls.add(s2);
+        }
+
+        @Test
+        void testMissingAcusDefaultsToZero() {
+            // Total ACUs should be 0 + 200 = 200
+            assertEquals(200.0, missingFieldsService.calculateTotalAcus(sessionsWithNulls), 0.01);
+        }
+
+        @Test
+        void testNullTaskTypeDefaultsToUnknown() {
+            Map<String, Integer> tasks = missingFieldsService.calculateSessionsByTaskType(sessionsWithNulls);
+            assertTrue(tasks.containsKey("unknown"));
+            assertEquals(1, tasks.get("unknown"));
+            assertEquals(1, tasks.get("Feature"));
+        }
+
+        @Test
+        void testNullBusinessUnitDefaultsToUnknown() {
+            Map<String, Integer> depts = missingFieldsService.calculateSessionsByDepartment(sessionsWithNulls);
+            assertTrue(depts.containsKey("Unknown"));
+            assertEquals(1, depts.get("Unknown"));
+            assertEquals(1, depts.get("Engineering"));
+        }
+
+        @Test
+        void testNullTaskTypeAcusByTaskType() {
+            Map<String, Double> acusByTask = missingFieldsService.calculateAcusByTaskType(sessionsWithNulls);
+            assertEquals(0.0, acusByTask.get("unknown"), 0.01);
+            assertEquals(200.0, acusByTask.get("Feature"), 0.01);
+        }
+
+        @Test
+        void testNullBusinessUnitAcusByDepartment() {
+            Map<String, Double> acusByDept = missingFieldsService.calculateAcusByDepartment(sessionsWithNulls);
+            assertEquals(0.0, acusByDept.get("Unknown"), 0.01);
+            assertEquals(200.0, acusByDept.get("Engineering"), 0.01);
+        }
+    }
+
+    // =========================================================================
+    // LARGE DATASET TESTS (equivalent to Python TestMetricsCalculatorLargeDataset)
+    // =========================================================================
+
+    @Nested
+    class LargeDatasetTests {
+
+        private MetricsService largeService;
+        private List<ConsumptionData> largeSessions;
+
+        @BeforeEach
+        void setUp() {
+            MetricsProperties config = new MetricsProperties();
+            config.setPricePerAcu(0.05);
+            largeService = new MetricsService(config);
+
+            largeSessions = new ArrayList<>();
+            String[] taskTypes = {"dev", "test", "review", "deploy"};
+            String[] departments = {"Engineering", "QA", "Operations"};
+
+            for (int i = 0; i < 100; i++) {
+                largeSessions.add(new ConsumptionData(
+                        String.format("s%04d", i),
+                        String.format("user_%04d", i % 10),
+                        "org_001",
+                        "proj_001",
+                        null,
+                        "2025-10-15T10:00:00",
+                        100.0 + (i % 7) * 50.0,
+                        departments[i % 3],
+                        taskTypes[i % 4],
+                        false, true, "Success"
+                ));
+            }
+        }
+
+        @Test
+        void testTotalSessionsCount() {
+            assertEquals(100, largeService.calculateTotalSessions(largeSessions));
+        }
+
+        @Test
+        void testUniqueUsersCount() {
+            assertEquals(10, largeService.calculateUniqueUsers(largeSessions));
+        }
+
+        @Test
+        void testCostPerUserSumsToTotal() {
+            Map<String, Double> costPerUser = largeService.calculateCostPerUser(largeSessions);
+            double totalFromUsers = costPerUser.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalCost = largeService.calculateTotalMonthlyCost(largeSessions);
+            assertEquals(totalCost, totalFromUsers, 0.01);
+        }
+
+        @Test
+        void testSessionsPerUserSumsToTotal() {
+            Map<String, Integer> sessionsPerUser = largeService.calculateSessionsPerUser(largeSessions);
+            int totalFromUsers = sessionsPerUser.values().stream().mapToInt(Integer::intValue).sum();
+            assertEquals(100, totalFromUsers);
+        }
+
+        @Test
+        void testTaskTypeSessionsSumToTotal() {
+            Map<String, Integer> byTask = largeService.calculateSessionsByTaskType(largeSessions);
+            int total = byTask.values().stream().mapToInt(Integer::intValue).sum();
+            assertEquals(100, total);
+        }
+
+        @Test
+        void testDepartmentSessionsSumToTotal() {
+            Map<String, Integer> byDept = largeService.calculateSessionsByDepartment(largeSessions);
+            int total = byDept.values().stream().mapToInt(Integer::intValue).sum();
+            assertEquals(100, total);
+        }
+
+        @Test
+        void testCostByTaskSumsToTotal() {
+            Map<String, Double> costByTask = largeService.calculateCostByTaskType(largeSessions);
+            double totalFromTasks = costByTask.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalCost = largeService.calculateTotalMonthlyCost(largeSessions);
+            assertEquals(totalCost, totalFromTasks, 0.01);
+        }
+
+        @Test
+        void testCostByDeptSumsToTotal() {
+            Map<String, Double> costByDept = largeService.calculateCostByDepartment(largeSessions);
+            double totalFromDepts = costByDept.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalCost = largeService.calculateTotalMonthlyCost(largeSessions);
+            assertEquals(totalCost, totalFromDepts, 0.01);
+        }
+
+        @Test
+        void testAcusByTaskSumsToTotal() {
+            Map<String, Double> acusByTask = largeService.calculateAcusByTaskType(largeSessions);
+            double totalFromTasks = acusByTask.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalAcus = largeService.calculateTotalAcus(largeSessions);
+            assertEquals(totalAcus, totalFromTasks, 0.01);
+        }
+
+        @Test
+        void testAcusByDeptSumsToTotal() {
+            Map<String, Double> acusByDept = largeService.calculateAcusByDepartment(largeSessions);
+            double totalFromDepts = acusByDept.values().stream().mapToDouble(Double::doubleValue).sum();
+            double totalAcus = largeService.calculateTotalAcus(largeSessions);
+            assertEquals(totalAcus, totalFromDepts, 0.01);
+        }
+    }
+
+    // =========================================================================
+    // MONTHLY ACUS FROM DAILY (references Python calculate_monthly_acus_from_daily)
+    // =========================================================================
+
+    @Nested
+    class MonthlyAcusFromDailyTests {
+
+        /**
+         * Tests for calculateMonthlyAcusFromDaily which filters consumption_by_date
+         * by month prefix (YYYY-MM format).
+         * Sources used: Python Function (calculate_monthly_acus_from_daily),
+         * raw_value: ACUs filtered from consumption_by_date
+         */
+
+        @Test
+        void testFiltersByMonthPrefix() {
+            Map<String, Double> consumptionByDate = new HashMap<>();
+            consumptionByDate.put("2025-11-01", 50.0);
+            consumptionByDate.put("2025-11-15", 75.0);
+            consumptionByDate.put("2025-11-30", 25.0);
+            consumptionByDate.put("2025-12-01", 100.0);
+
+            double novemberAcus = metricsService.calculateMonthlyAcusFromDaily(
+                    consumptionByDate, "2025-11");
+            assertEquals(150.0, novemberAcus, 0.01);
+        }
+
+        @Test
+        void testNoMatchReturnsZero() {
+            Map<String, Double> consumptionByDate = new HashMap<>();
+            consumptionByDate.put("2025-09-01", 100.0);
+
+            double result = metricsService.calculateMonthlyAcusFromDaily(
+                    consumptionByDate, "2025-10");
+            assertEquals(0.0, result, 0.01);
+        }
+
+        @Test
+        void testEmptyMapReturnsZero() {
+            double result = metricsService.calculateMonthlyAcusFromDaily(
+                    new HashMap<>(), "2025-10");
+            assertEquals(0.0, result, 0.01);
+        }
+
+        @Test
+        void testMultipleMonthsIsolated() {
+            Map<String, Double> consumptionByDate = new HashMap<>();
+            consumptionByDate.put("2025-10-01", 100.0);
+            consumptionByDate.put("2025-10-15", 200.0);
+            consumptionByDate.put("2025-11-01", 75.0);
+            consumptionByDate.put("2025-11-15", 125.0);
+            consumptionByDate.put("2025-12-01", 50.0);
+
+            assertEquals(300.0, metricsService.calculateMonthlyAcusFromDaily(
+                    consumptionByDate, "2025-10"), 0.01);
+            assertEquals(200.0, metricsService.calculateMonthlyAcusFromDaily(
+                    consumptionByDate, "2025-11"), 0.01);
+            assertEquals(50.0, metricsService.calculateMonthlyAcusFromDaily(
+                    consumptionByDate, "2025-12"), 0.01);
+        }
     }
 }

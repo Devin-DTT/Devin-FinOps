@@ -1,0 +1,48 @@
+<div class="dashboard-container">
+  <header class="dashboard-header">
+    <h1>FinOps Dashboard</h1>
+    <div class="connection-status" [ngClass]="connectionStatus">
+      <span class="status-indicator"></span>
+      <span>{{ connectionStatus | titlecase }}</span>
+    </div>
+  </header>
+
+  <div *ngIf="errorMessage" class="error-banner">
+    {{ errorMessage }}
+  </div>
+
+  <div class="controls">
+    <button (click)="connect()" [disabled]="connectionStatus === 'connected' || connectionStatus === 'connecting'">
+      Connect
+    </button>
+    <button (click)="disconnect()" [disabled]="connectionStatus === 'disconnected'">
+      Disconnect
+    </button>
+    <button (click)="refreshMetrics()" [disabled]="connectionStatus !== 'connected'">
+      Refresh
+    </button>
+  </div>
+
+  <div *ngIf="isLoading" class="loading">Loading metrics...</div>
+
+  <div *ngIf="metrics" class="metrics-summary">
+    <div class="metric-card">
+      <h3>Total Cost</h3>
+      <p class="metric-value">{{ totalCost | number:'1.2-2' }}</p>
+    </div>
+    <div class="metric-card">
+      <h3>Total ACUs</h3>
+      <p class="metric-value">{{ totalAcus | number:'1.0-2' }}</p>
+    </div>
+    <div class="metric-card">
+      <h3>Total Sessions</h3>
+      <p class="metric-value">{{ totalSessions }}</p>
+    </div>
+    <div class="metric-card">
+      <h3>Unique Users</h3>
+      <p class="metric-value">{{ uniqueUsers }}</p>
+    </div>
+  </div>
+
+  <app-metrics-display *ngIf="metrics" [metricsResult]="metrics"></app-metrics-display>
+</div>

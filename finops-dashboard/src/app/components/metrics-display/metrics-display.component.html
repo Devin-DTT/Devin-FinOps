@@ -1,0 +1,40 @@
+<div class="metrics-display" *ngIf="metricsResult">
+  <h2>Metrics Details</h2>
+  <p class="reporting-period">Period: {{ reportingPeriod }}</p>
+
+  <div class="consistency-check" [ngClass]="{'consistent': isCostConsistent, 'inconsistent': !isCostConsistent}">
+    <span *ngIf="isCostConsistent">Cost consistency check passed</span>
+    <span *ngIf="!isCostConsistent">Cost consistency check failed</span>
+  </div>
+
+  <div class="details-section">
+    <h3>Average ACUs per Session</h3>
+    <p>{{ averageAcusPerSession | number:'1.2-2' }}</p>
+  </div>
+
+  <div class="cost-per-user-section" *ngIf="costPerUserEntries.length > 0">
+    <h3>Cost per User</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let entry of costPerUserEntries">
+          <td>{{ entry.user }}</td>
+          <td>{{ formatCost(entry.cost) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div *ngIf="costPerUserEntries.length === 0" class="no-data">
+    No user cost data available
+  </div>
+</div>
+
+<div *ngIf="!metricsResult" class="no-metrics">
+  <p>No metrics data available</p>
+</div>
