@@ -32,3 +32,11 @@ htmlcov/
 .envrc
 .env
 *.env
+
+# Java / Maven
+finops-service/target/
+
+# Angular
+finops-dashboard/node_modules/
+finops-dashboard/dist/
+finops-dashboard/.angular/
