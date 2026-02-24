@@ -127,7 +127,8 @@ public class FinOpsWebSocketHandler extends TextWebSocketHandler {
 
             Map<String, Object> response = Map.of(
                     "type", "metrics",
-                    "data", result
+                    "data", result,
+                    "sessions", data
             );
             sendToSession(session, response);
 
@@ -152,7 +153,8 @@ public class FinOpsWebSocketHandler extends TextWebSocketHandler {
 
             Map<String, Object> response = Map.of(
                     "type", "metrics",
-                    "data", result
+                    "data", result,
+                    "sessions", data
             );
             broadcastMessage(response);
 

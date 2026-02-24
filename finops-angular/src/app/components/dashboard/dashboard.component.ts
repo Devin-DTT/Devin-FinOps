@@ -33,8 +33,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.websocketService.connectionStatus$.subscribe(connected => {
         this.wsConnected = connected;
         if (connected) {
-          // Request metrics from backend on connect
-          this.websocketService.fetchMetrics(null, null);
+          // Request the last 90 days of data by default
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 90);
+
+          this.websocketService.fetchMetrics(
+            startDate.toISOString().split('T')[0],
+            endDate.toISOString().split('T')[0]
+          );
         }
       })
     );
@@ -42,10 +49,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Subscribe to WebSocket messages
     this.subscription.add(
       this.websocketService.messages$.subscribe(msg => {
-        if (msg.type === 'metrics' && msg.data) {
-          // TODO: Transform backend MetricsResult into DailyConsumption[]
-          // For now, real-time data will be handled when backend is running
-          console.log('Received metrics from WebSocket:', msg.data);
+        if (msg.type === 'metrics') {
+          const pricePerAcu = msg.data?.config?.['price_per_acu'];
+          const costPerAcu = typeof pricePerAcu === 'number' ? pricePerAcu : undefined;
+
+          if (msg.sessions && msg.sessions.length > 0) {
+            this.finopsService.loadSessions(msg.sessions, costPerAcu);
+          }
         }
         if (msg.type === 'error') {
           console.error('WebSocket error:', msg.message);

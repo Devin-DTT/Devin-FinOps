@@ -49,6 +49,8 @@ export interface ExecutiveMetrics {
   diferenciaCost: number;
   porcentajeACUs: number;
   porcentajeCost: number;
+  mesActualLabel?: string;
+  mesAnteriorLabel?: string;
 }
 
 /**
@@ -71,6 +73,7 @@ export interface WsMessage {
   message?: string;
   sessionId?: string;
   data?: MetricsPayload;
+  sessions?: ConsumptionData[];
 }
 
 /**

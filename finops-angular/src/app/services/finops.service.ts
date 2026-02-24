@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
+  ConsumptionData,
   DailyConsumption,
   WeeklyConsumption,
   ExecutiveMetrics,
@@ -32,7 +33,8 @@ export class FinopsService {
     acusMes: 0, acusMesAnterior: 0,
     costeMes: 0, costeMesAnterior: 0,
     diferenciaACUs: 0, diferenciaCost: 0,
-    porcentajeACUs: 0, porcentajeCost: 0
+    porcentajeACUs: 0, porcentajeCost: 0,
+    mesActualLabel: '', mesAnteriorLabel: ''
   });
   private filtersSubject = new BehaviorSubject<FilterState>({
     days: 90,
@@ -42,6 +44,8 @@ export class FinopsService {
     viewType: 'daily',
     distributionType: 'user'
   });
+
+  private costPerAcu = COST_PER_ACU;
 
   readonly allData$: Observable<DailyConsumption[]> = this.allDataSubject.asObservable();
   readonly filteredData$: Observable<DailyConsumption[]> = this.filteredDataSubject.asObservable();
@@ -54,6 +58,30 @@ export class FinopsService {
   loadData(rawData: DailyConsumption[]): void {
     this.allDataSubject.next(rawData);
     this.recalculate();
+  }
+
+  /**
+   * Load raw session-level data from the Java backend and normalize it to the
+   * internal DailyConsumption shape used by the dashboard.
+   */
+  loadSessions(sessions: ConsumptionData[], costPerAcu?: number): void {
+    if (typeof costPerAcu === 'number' && Number.isFinite(costPerAcu) && costPerAcu > 0) {
+      this.costPerAcu = costPerAcu;
+    }
+
+    const normalized: DailyConsumption[] = sessions.map(s => {
+      const date = this.extractDate(s.timestamp);
+      const acus = Number(s.acu_consumed ?? 0);
+      return {
+        date,
+        acus,
+        cost: parseFloat((acus * this.costPerAcu).toFixed(2)),
+        userId: s.user_id ?? 'unknown',
+        organizationId: s.organization_id ?? 'unknown'
+      };
+    });
+
+    this.loadData(normalized);
   }
 
   /**
@@ -198,7 +226,7 @@ export class FinopsService {
         const baseACUs = 20;
         const variation = Math.random() * 20 - 10;
         const acus = Math.max(10, baseACUs + variation);
-        const cost = acus * COST_PER_ACU;
+        const cost = acus * this.costPerAcu;
 
         data.push({
           date: dateStr,
@@ -220,16 +248,11 @@ export class FinopsService {
   }
 
   /**
-   * Calculate executive metrics (current month vs previous month).
+   * Calculate executive metrics comparing the two most recent months in the data.
    * Replaces calculateMetricsFromData() from vanilla JS.
    */
   private calculateMetrics(): void {
     const allData = this.allDataSubject.value;
-    const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
-    const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
     // Aggregate by date first
     const dailyTotals: Record<string, { acus: number; cost: number }> = {};
@@ -241,16 +264,27 @@ export class FinopsService {
       dailyTotals[item.date].cost += item.cost;
     });
 
+    // Find the two most recent months present in data
+    const monthKeys = new Set<string>();
+    Object.keys(dailyTotals).forEach(date => monthKeys.add(date.substring(0, 7)));
+    const sortedMonths = Array.from(monthKeys).sort();
+
+    if (sortedMonths.length === 0) {
+      return; // no data
+    }
+
+    const latestMonth = sortedMonths[sortedMonths.length - 1];
+    const previousMonth = sortedMonths.length > 1 ? sortedMonths[sortedMonths.length - 2] : null;
+
     let acusMes = 0, costeMes = 0;
     let acusMesAnterior = 0, costeMesAnterior = 0;
 
     Object.keys(dailyTotals).forEach(date => {
-      const d = new Date(date);
-      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+      if (date.startsWith(latestMonth)) {
         acusMes += dailyTotals[date].acus;
         costeMes += dailyTotals[date].cost;
       }
-      if (d.getMonth() === prevMonth && d.getFullYear() === prevYear) {
+      if (previousMonth && date.startsWith(previousMonth)) {
         acusMesAnterior += dailyTotals[date].acus;
         costeMesAnterior += dailyTotals[date].cost;
       }
@@ -261,11 +295,15 @@ export class FinopsService {
     const porcentajeACUs = acusMesAnterior !== 0 ? (diferenciaACUs / acusMesAnterior) * 100 : 0;
     const porcentajeCost = costeMesAnterior !== 0 ? (diferenciaCost / costeMesAnterior) * 100 : 0;
 
+    const mesActualLabel = this.getMonthLabel(latestMonth);
+    const mesAnteriorLabel = previousMonth ? this.getMonthLabel(previousMonth) : 'N/A';
+
     this.metricsSubject.next({
       acusMes, acusMesAnterior,
       costeMes, costeMesAnterior,
       diferenciaACUs, diferenciaCost,
-      porcentajeACUs, porcentajeCost
+      porcentajeACUs, porcentajeCost,
+      mesActualLabel, mesAnteriorLabel
     });
   }
 
@@ -281,7 +319,9 @@ export class FinopsService {
     // Days filter
     if (filters.days) {
       const allDates = this.allDataSubject.value.map(d => d.date);
-      const maxDate = allDates.length > 0 ? allDates[allDates.length - 1] : new Date().toISOString().split('T')[0];
+      const maxDate = allDates.length > 0
+        ? allDates.reduce((max, cur) => (cur > max ? cur : max), allDates[0])
+        : new Date().toISOString().split('T')[0];
       const cutoff = new Date(maxDate);
       cutoff.setDate(cutoff.getDate() - filters.days);
       data = data.filter(item => new Date(item.date) >= cutoff);
@@ -298,6 +338,24 @@ export class FinopsService {
     }
 
     this.filteredDataSubject.next(data);
+  }
+
+  private extractDate(timestamp: string): string {
+    if (!timestamp) {
+      return new Date().toISOString().split('T')[0];
+    }
+
+    // Fast path for ISO-like strings
+    if (timestamp.length >= 10 && timestamp[4] === '-' && timestamp[7] === '-') {
+      return timestamp.substring(0, 10);
+    }
+
+    const d = new Date(timestamp);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+
+    return new Date().toISOString().split('T')[0];
   }
 
   private getISOWeek(dateStr: string): string {
