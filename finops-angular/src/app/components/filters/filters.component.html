@@ -1,0 +1,57 @@
+<!-- Filtros de Periodo -->
+<div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-4">Filtros</h2>
+  <div class="flex flex-wrap gap-4 items-center">
+
+    <!-- Filtro por Mes -->
+    <div class="flex items-center gap-2">
+      <label for="month-filter" class="text-sm font-semibold text-gray-700">Filtro por Mes:</label>
+      <select id="month-filter"
+              class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              (change)="onMonthChange($event)">
+        <option value="">Todos los meses</option>
+        <option *ngFor="let m of availableMonths" [value]="m">
+          {{ finopsService.getMonthLabel(m) }}
+        </option>
+      </select>
+    </div>
+
+    <!-- Filtro por Dias -->
+    <div class="flex items-center gap-2">
+      <span class="text-sm font-semibold text-gray-700">Filtro por Dias:</span>
+      <button (click)="onDaysFilter(60)"
+              class="px-4 py-2 rounded-lg hover:bg-blue-600 transition text-white"
+              [ngClass]="currentDays === 60 ? 'bg-blue-600' : 'bg-blue-500'">
+        Ultimos 60 dias
+      </button>
+      <button (click)="onDaysFilter(90)"
+              class="px-4 py-2 rounded-lg hover:bg-blue-700 transition text-white"
+              [ngClass]="currentDays === 90 ? 'bg-blue-700' : 'bg-blue-600'">
+        Ultimos 90 dias
+      </button>
+    </div>
+
+    <!-- Filtro por Usuario -->
+    <div class="flex items-center gap-2">
+      <label for="user-filter" class="text-sm font-semibold text-gray-700">Filtro por Usuario:</label>
+      <select id="user-filter"
+              class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              (change)="onUserChange($event)">
+        <option value="">Todos los usuarios</option>
+        <option *ngFor="let u of availableUsers" [value]="u">{{ u }}</option>
+      </select>
+    </div>
+
+    <!-- Filtro por Organizacion -->
+    <div class="flex items-center gap-2">
+      <label for="org-filter" class="text-sm font-semibold text-gray-700">Filtro por Organizacion:</label>
+      <select id="org-filter"
+              class="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              (change)="onOrgChange($event)">
+        <option value="">Todas las organizaciones</option>
+        <option *ngFor="let o of availableOrgs" [value]="o">{{ o }}</option>
+      </select>
+    </div>
+
+  </div>
+</div>
