@@ -102,10 +102,10 @@
                 </dependencies>
                 <configuration>
                     <configLocation>checkstyle.xml</configLocation>
+                    <suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
                     <consoleOutput>true</consoleOutput>
                     <failsOnError>true</failsOnError>
                     <violationSeverity>warning</violationSeverity>
-                    <includeTestSourceRoots>false</includeTestSourceRoots>
                 </configuration>
                 <executions>
                     <execution>
