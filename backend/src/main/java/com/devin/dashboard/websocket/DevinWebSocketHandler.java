@@ -12,7 +12,11 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import reactor.core.Disposable;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +51,8 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, List<Disposable>> activeSubscriptions = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -89,6 +95,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        // Dispose previous poll cycle's subscriptions to prevent unbounded growth
+        List<Disposable> previousSubscriptions = activeSubscriptions.get(session.getId());
+        if (previousSubscriptions != null) {
+            previousSubscriptions.forEach(Disposable::dispose);
+            previousSubscriptions.clear();
+        }
+
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
         for (EndpointDefinition endpoint : readEndpoints) {
             try {
@@ -105,7 +118,7 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                         );
 
                 activeSubscriptions
-                        .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new java.util.ArrayList<>()))
+                        .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
                         .add(subscription);
 
             } catch (Exception e) {
@@ -115,15 +128,24 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Builds a JSON payload wrapping the endpoint data.
+     * Builds a JSON payload wrapping the endpoint data using Jackson for proper serialization.
      */
     private String buildPayload(String endpointName, String data) {
-        return String.format(
-                "{\"type\":\"data\",\"endpoint\":\"%s\",\"timestamp\":%d,\"data\":%s}",
-                endpointName,
-                System.currentTimeMillis(),
-                data.isEmpty() ? "null" : data
-        );
+        try {
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("type", "data");
+            node.put("endpoint", endpointName);
+            node.put("timestamp", System.currentTimeMillis());
+            if (data.isEmpty()) {
+                node.putNull("data");
+            } else {
+                node.set("data", objectMapper.readTree(data));
+            }
+            return objectMapper.writeValueAsString(node);
+        } catch (Exception e) {
+            log.error("Failed to build payload for endpoint {}", endpointName, e);
+            return "{\"type\":\"error\",\"endpoint\":\"" + endpointName.replace("\"", "\\\"") + "\"}";
+        }
     }
 
     /**
