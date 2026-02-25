@@ -1,6 +1,6 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Observable, Subject, timer, EMPTY } from 'rxjs';
-import { retry, tap, switchMap, catchError } from 'rxjs/operators';
+import { switchMap, catchError } from 'rxjs/operators';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { DevinData } from '../../models/devin-data.model';
 import { environment } from '../../../environments/environment';
