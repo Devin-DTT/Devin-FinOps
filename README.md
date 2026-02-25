@@ -14,22 +14,27 @@ Full-stack FinOps dashboard for monitoring Devin Enterprise usage, costs, and pr
 - Node.js 18+ and Angular CLI (for the frontend)
 - A **Devin service user token** (see below)
 
-## Authentication: Devin Service User
+## Authentication: Devin Service Users
 
-The backend authenticates against the Devin API using a **service user token** (Bearer).
-Personal API keys (`apk_user_*`) are deprecated; you must provision a service user instead.
+The backend authenticates against the Devin API using **two service user tokens** (Bearer),
+one for enterprise-scoped endpoints and one for organization-scoped endpoints.
+Personal API keys (`apk_user_*`) are deprecated; you must provision service users instead.
 
-### Provisioning a Service User
+### Provisioning Service Users
+
+#### 1. Enterprise Service User
+
+Used for enterprise-scoped endpoints (`/v3/enterprise/...`): sessions metrics, billing, ACU limits, users, organizations, etc.
 
 1. Obtain a temporary **admin API key** from your Devin Enterprise admin panel.
-2. Call the Devin API to create a service user with the required permissions:
+2. Call the Devin API to create an enterprise service user:
 
    ```bash
    curl -X POST https://api.devin.ai/v3beta1/enterprise/service-users \
      -H "Authorization: Bearer <ADMIN_API_KEY>" \
      -H "Content-Type: application/json" \
      -d '{
-       "name": "finops-dashboard",
+       "name": "finops-dashboard-enterprise",
        "permissions": [
          "ViewAccountMetrics",
          "ManageBilling",
@@ -38,30 +43,48 @@ Personal API keys (`apk_user_*`) are deprecated; you must provision a service us
      }'
    ```
 
-3. Copy the `token` field from the JSON response. This is your service user Bearer token.
+3. Copy the `token` field from the JSON response.
 4. Set the token as an environment variable:
 
    ```bash
-   export DEVIN_SERVICE_TOKEN="<token_from_step_3>"
+   export DEVIN_ENTERPRISE_SERVICE_TOKEN="<token_from_step_3>"
    ```
 
-   Or add it to your `.envrc` / CI/CD secrets.
+#### 2. Organization Service User
 
-> **Important**: Never commit the actual token to the repository. Use environment variables or a secrets manager.
+Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessions, knowledge, playbooks, secrets, schedules, etc.
+
+1. Create an organization service user with the appropriate permissions for your org.
+2. Copy the `token` and note your `org_id`.
+3. Set both as environment variables:
+
+   ```bash
+   export DEVIN_ORG_SERVICE_TOKEN="<org_token>"
+   export DEVIN_ORG_ID="<your_org_id>"
+   ```
+
+   Or add them to your `.envrc` / CI/CD secrets.
+
+> **Important**: Never commit actual tokens to the repository. Use environment variables or a secrets manager.
 
 ### Environment Variables
 
-| Variable              | Required | Description                                      |
-|-----------------------|----------|--------------------------------------------------|
-| `DEVIN_SERVICE_TOKEN` | Yes      | Bearer token from the provisioned service user   |
-| `FINOPS_PRICE_PER_ACU`| No      | Price per ACU (default: `0.05`)                  |
-| `FINOPS_CURRENCY`     | No      | Currency code (default: `USD`)                   |
+| Variable                         | Required | Description                                                    |
+|----------------------------------|----------|----------------------------------------------------------------|
+| `DEVIN_ENTERPRISE_SERVICE_TOKEN` | Yes      | Bearer token for enterprise-scoped API endpoints               |
+| `DEVIN_ORG_SERVICE_TOKEN`        | Yes      | Bearer token for organization-scoped API endpoints             |
+| `DEVIN_ORG_ID`                   | Yes      | Organization ID for organization-scoped API endpoints          |
+| `DEVIN_SERVICE_TOKEN`            | No       | Legacy alias for `DEVIN_ENTERPRISE_SERVICE_TOKEN` (deprecated) |
+| `FINOPS_PRICE_PER_ACU`           | No       | Price per ACU (default: `0.05`)                                |
+| `FINOPS_CURRENCY`                | No       | Currency code (default: `USD`)                                 |
 
 ## Running the Backend
 
 ```bash
 cd backend
-export DEVIN_SERVICE_TOKEN="your_service_user_token_here"
+export DEVIN_ENTERPRISE_SERVICE_TOKEN="<enterprise_service_user_token>"
+export DEVIN_ORG_SERVICE_TOKEN="<org_service_user_token>"
+export DEVIN_ORG_ID="<your_org_id>"
 mvn spring-boot:run
 ```
 
@@ -79,9 +102,14 @@ The frontend starts on port **4200** and proxies API calls to the backend.
 
 ## Startup Validation
 
-On startup the backend validates that `DEVIN_SERVICE_TOKEN` is present and non-empty.
-If the token is missing, the application will fail to start with a descriptive error message.
-A warning is logged if the token appears suspiciously short (fewer than 20 characters).
+On startup the backend validates that all required tokens and configuration are present:
+
+- `DEVIN_ENTERPRISE_SERVICE_TOKEN` must be set (falls back to `DEVIN_SERVICE_TOKEN` for backward compatibility).
+- `DEVIN_ORG_SERVICE_TOKEN` must be set.
+- `DEVIN_ORG_ID` must be set.
+
+If any required value is missing, the application will fail to start with a descriptive error message.
+A warning is logged if any token appears suspiciously short (fewer than 20 characters).
 
 ## Error Handling
 
