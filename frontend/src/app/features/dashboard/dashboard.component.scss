@@ -1,0 +1,102 @@
+.spacer {
+  flex: 1 1 auto;
+}
+
+.connection-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  padding: 4px 12px;
+  border-radius: 16px;
+
+  &.connected {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+  }
+
+  &.disconnected {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+  }
+
+  &.connecting {
+    background-color: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.dashboard-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.kpi-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  text-align: center;
+
+  .kpi-value {
+    font-size: 48px;
+    font-weight: 700;
+    display: block;
+    margin-top: 8px;
+  }
+
+  &.kpi-active .kpi-value {
+    color: #3f51b5;
+  }
+
+  &.kpi-completed .kpi-value {
+    color: #4caf50;
+  }
+
+  &.kpi-failed .kpi-value {
+    color: #f44336;
+  }
+}
+
+.chart-card {
+  margin-bottom: 24px;
+
+  .chart-container {
+    height: 300px;
+    position: relative;
+  }
+}
+
+.table-card {
+  mat-card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .status-filter {
+    width: 200px;
+    margin-left: 16px;
+  }
+
+  .sessions-table {
+    width: 100%;
+  }
+
+  .no-data-row td {
+    text-align: center;
+    padding: 24px;
+    color: rgba(0, 0, 0, 0.54);
+    font-style: italic;
+  }
+}
