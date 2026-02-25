@@ -268,7 +268,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     this.state.sessions = sessionList;
-    this.state.totalSessions = sessionList.length;
+    this.state.totalSessions = typeof data['total'] === 'number' ? (data['total'] as number) : sessionList.length;
     this.state.runningSessions = sessionList.filter(s => s.status === 'running').length;
     this.state.finishedSessions = sessionList.filter(s => s.status === 'finished').length;
     this.state.failedSessions = sessionList.filter(s => s.status === 'failed').length;
@@ -296,16 +296,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleDailyConsumption(data: Record<string, unknown>): void {
-    // The API returns 'consumption_by_date' with {date: epoch, acus: number}
-    let entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
-    if (entries.length === 0) {
-      const rawEntries = this.extractArray<Record<string, unknown>>(data, 'consumption_by_date');
+    // Check for named keys directly (avoid extractArray's fallback picking up wrong array)
+    let entries: DailyConsumption[] = [];
+    if (Array.isArray(data['daily_consumption'])) {
+      entries = data['daily_consumption'] as DailyConsumption[];
+    } else if (Array.isArray(data['consumption_by_date'])) {
+      // The API returns 'consumption_by_date' with {date: epoch, acus: number}
+      const rawEntries = data['consumption_by_date'] as Record<string, unknown>[];
       entries = rawEntries.map(e => ({
         date: typeof e['date'] === 'number'
           ? new Date((e['date'] as number) * 1000).toISOString().split('T')[0]
           : String(e['date'] ?? ''),
         acu_consumed: (e['acus'] as number) ?? 0
       }));
+    } else {
+      entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
     }
     this.state.dailyConsumption = entries;
     this.updateAcuChart(entries);
@@ -350,25 +355,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleHypervisors(data: Record<string, unknown>): void {
-    // API returns paginated { items: [...], total: N }
-    const list = this.extractArray<unknown>(data, 'hypervisors');
-    this.state.hypervisorCount = list.length > 0 ? list.length
-      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.hypervisorCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'hypervisors').length;
   }
 
   private handleOrganizations(data: Record<string, unknown>): void {
-    // API returns paginated { items: [...], total: N }
-    const list = this.extractArray<unknown>(data, 'organizations');
-    this.state.orgCount = list.length > 0 ? list.length
-      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.orgCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'organizations').length;
   }
 
   private handleUsers(data: Record<string, unknown>): void {
-    // API returns paginated { items: [...], total: N }
-    // Per user note: total is at response.total, NOT response.items.total
-    const list = this.extractArray<unknown>(data, 'users');
-    this.state.userCount = list.length > 0 ? list.length
-      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.userCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'users').length;
   }
 
   // --- Helpers ---
