@@ -71,7 +71,13 @@ public class DevinApiClient {
                 .retrieve()
                 .bodyToFlux(String.class)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("Service user token is invalid or expired for endpoint {}", endpoint.getName());
+                    log.error("Service user token is invalid or expired for endpoint {} (HTTP 401)", endpoint.getName());
+                    return Flux.error(ex);
+                })
+                .onErrorResume(WebClientResponseException.Forbidden.class, ex -> {
+                    log.error("Service user token lacks required permissions for endpoint {} (HTTP 403). "
+                            + "Verify the service user has ViewAccountMetrics, ManageBilling, and ManageEnterpriseSettings.",
+                            endpoint.getName());
                     return Flux.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
@@ -106,7 +112,13 @@ public class DevinApiClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("Service user token is invalid or expired for endpoint {}", endpoint.getName());
+                    log.error("Service user token is invalid or expired for endpoint {} (HTTP 401)", endpoint.getName());
+                    return Mono.error(ex);
+                })
+                .onErrorResume(WebClientResponseException.Forbidden.class, ex -> {
+                    log.error("Service user token lacks required permissions for endpoint {} (HTTP 403). "
+                            + "Verify the service user has ViewAccountMetrics, ManageBilling, and ManageEnterpriseSettings.",
+                            endpoint.getName());
                     return Mono.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
@@ -132,13 +144,14 @@ public class DevinApiClient {
     /**
      * Determines whether the given throwable warrants a retry.
      * Returns true for 5xx server errors and 429 Too Many Requests.
-     * <p>401 Unauthorized errors are NOT retried — they indicate an invalid or expired
-     * service user token and require manual intervention (re-provisioning the token).</p>
+     * <p>401 Unauthorized and 403 Forbidden errors are NOT retried — they indicate
+     * an invalid/expired token or insufficient permissions and require manual
+     * intervention (re-provisioning the service user token with correct permissions).</p>
      */
     private boolean isRetryable(Throwable throwable) {
         if (throwable instanceof WebClientResponseException ex) {
             int status = ex.getStatusCode().value();
-            // 401 is not retryable: service user token is invalid/expired, retrying won't help
+            // 401/403 are not retryable: token is invalid/expired or lacks permissions
             return status >= 500 || status == 429;
         }
         return false;
