@@ -3,7 +3,7 @@ package com.devin.dashboard.websocket;
 import com.devin.dashboard.config.EndpointLoader;
 import com.devin.dashboard.model.EndpointDefinition;
 import com.devin.dashboard.service.DevinApiClient;
-import lombok.RequiredArgsConstructor;
+import com.devin.dashboard.service.OrgApiClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -11,6 +11,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,11 +46,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     private final DevinApiClient devinApiClient;
+    private final OrgApiClient orgApiClient;
     private final EndpointLoader endpointLoader;
+
+    public DevinWebSocketHandler(DevinApiClient devinApiClient,
+                                  OrgApiClient orgApiClient,
+                                  EndpointLoader endpointLoader) {
+        this.devinApiClient = devinApiClient;
+        this.orgApiClient = orgApiClient;
+        this.endpointLoader = endpointLoader;
+    }
 
     /** Tracks active polling tasks per session so they can be cancelled on disconnect. */
     private final Map<String, ScheduledFuture<?>> scheduledTasks = new ConcurrentHashMap<>();
@@ -122,8 +131,17 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
         for (EndpointDefinition endpoint : readEndpoints) {
             try {
-                Disposable subscription = devinApiClient
-                        .get(endpoint, Collections.emptyMap())
+                // Route to the correct API client based on endpoint scope
+                String scope = endpoint.getScope();
+                Flux<String> responseFlux;
+                if ("organization".equalsIgnoreCase(scope)) {
+                    responseFlux = orgApiClient.get(endpoint,
+                            Map.of("org_id", orgApiClient.getOrgId()));
+                } else {
+                    responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
+                }
+
+                Disposable subscription = responseFlux
                         .collectList()
                         .subscribe(
                                 dataChunks -> {

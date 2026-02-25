@@ -1,6 +1,7 @@
 package com.devin.dashboard.service;
 
 import com.devin.dashboard.model.EndpointDefinition;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -16,48 +17,53 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * Reactive HTTP client for enterprise-scoped Devin API endpoints.
+ * Reactive HTTP client for organization-scoped Devin API endpoints.
  * Uses Spring WebFlux {@link WebClient} with Bearer token authentication
- * from a Devin enterprise service user and exponential-backoff retry logic (max 3 attempts).
+ * from an organization service user and exponential-backoff retry logic (max 3 attempts).
  *
- * <p>Enterprise endpoints use the base URL {@code https://api.devin.ai/v3/enterprise/...}
- * and require an enterprise service user token.</p>
+ * <p>Organization endpoints use the base URL {@code https://api.devin.ai/v3/organizations/{org_id}/...}
+ * and require a separate token from enterprise endpoints.</p>
  */
 @Slf4j
 @Service
-public class DevinApiClient {
+public class OrgApiClient {
 
     private final WebClient webClient;
 
+    @Getter
+    private final String orgId;
+
     /**
-     * Constructs the client, injecting the enterprise service user token from the environment
-     * variable {@code DEVIN_ENTERPRISE_SERVICE_TOKEN} (falls back to {@code DEVIN_SERVICE_TOKEN}
-     * for backward compatibility) and configuring it as a default Bearer header.
+     * Constructs the organization API client, injecting the org service user token
+     * and org ID from environment variables.
      *
-     * @param enterpriseToken the Devin enterprise service user token
-     * @param legacyToken     legacy token (DEVIN_SERVICE_TOKEN) used as fallback
-     * @throws IllegalStateException if no token is configured
+     * @param orgServiceToken the organization service user token (DEVIN_ORG_SERVICE_TOKEN)
+     * @param orgId           the organization ID (DEVIN_ORG_ID)
+     * @throws IllegalStateException if either value is not configured
      */
-    public DevinApiClient(
-            @Value("${DEVIN_ENTERPRISE_SERVICE_TOKEN:}") String enterpriseToken,
-            @Value("${DEVIN_SERVICE_TOKEN:}") String legacyToken) {
-        String serviceToken = (enterpriseToken != null && !enterpriseToken.isBlank())
-                ? enterpriseToken : legacyToken;
-        if (serviceToken == null || serviceToken.isBlank()) {
+    public OrgApiClient(
+            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgServiceToken,
+            @Value("${DEVIN_ORG_ID:}") String orgId) {
+
+        if (orgServiceToken == null || orgServiceToken.isBlank()) {
             throw new IllegalStateException(
-                    "DEVIN_ENTERPRISE_SERVICE_TOKEN (or DEVIN_SERVICE_TOKEN) is not configured. "
-                    + "Provision a Devin enterprise service user and set its token as DEVIN_ENTERPRISE_SERVICE_TOKEN.");
+                    "DEVIN_ORG_SERVICE_TOKEN is not configured. "
+                    + "Provision a Devin organization service user and set its token as DEVIN_ORG_SERVICE_TOKEN.");
         }
-        if (enterpriseToken == null || enterpriseToken.isBlank()) {
-            log.warn("DEVIN_ENTERPRISE_SERVICE_TOKEN is not set; falling back to DEVIN_SERVICE_TOKEN. "
-                    + "Please migrate to DEVIN_ENTERPRISE_SERVICE_TOKEN.");
+        if (orgId == null || orgId.isBlank()) {
+            throw new IllegalStateException(
+                    "DEVIN_ORG_ID is not configured. "
+                    + "Set the organization ID as DEVIN_ORG_ID.");
         }
-        if (serviceToken.length() < 20) {
-            log.warn("Enterprise service token appears too short ({} chars). "
-                    + "Verify that the correct service user token is configured.", serviceToken.length());
+        if (orgServiceToken.length() < 20) {
+            log.warn("DEVIN_ORG_SERVICE_TOKEN appears too short ({} chars). "
+                    + "Verify that the correct organization service user token is configured.",
+                    orgServiceToken.length());
         }
+
+        this.orgId = orgId;
         this.webClient = WebClient.builder()
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + serviceToken)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + orgServiceToken)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json")
                 .build();
@@ -84,12 +90,13 @@ public class DevinApiClient {
                 .retrieve()
                 .bodyToFlux(String.class)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("Service user token is invalid or expired for endpoint {} (HTTP 401)", endpoint.getName());
+                    log.error("Organization service user token is invalid or expired for endpoint {} (HTTP 401)",
+                            endpoint.getName());
                     return Flux.error(ex);
                 })
                 .onErrorResume(WebClientResponseException.Forbidden.class, ex -> {
-                    log.error("Service user token lacks required permissions for endpoint {} (HTTP 403). "
-                            + "Verify the service user has ViewAccountMetrics, ManageBilling, and ManageEnterpriseSettings.",
+                    log.error("Organization service user token lacks required permissions for endpoint {} (HTTP 403). "
+                            + "Verify the service user has the necessary organization-level permissions.",
                             endpoint.getName());
                     return Flux.error(ex);
                 })
@@ -125,12 +132,13 @@ public class DevinApiClient {
                 .retrieve()
                 .bodyToMono(String.class)
                 .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("Service user token is invalid or expired for endpoint {} (HTTP 401)", endpoint.getName());
+                    log.error("Organization service user token is invalid or expired for endpoint {} (HTTP 401)",
+                            endpoint.getName());
                     return Mono.error(ex);
                 })
                 .onErrorResume(WebClientResponseException.Forbidden.class, ex -> {
-                    log.error("Service user token lacks required permissions for endpoint {} (HTTP 403). "
-                            + "Verify the service user has ViewAccountMetrics, ManageBilling, and ManageEnterpriseSettings.",
+                    log.error("Organization service user token lacks required permissions for endpoint {} (HTTP 403). "
+                            + "Verify the service user has the necessary organization-level permissions.",
                             endpoint.getName());
                     return Mono.error(ex);
                 })
@@ -157,14 +165,11 @@ public class DevinApiClient {
     /**
      * Determines whether the given throwable warrants a retry.
      * Returns true for 5xx server errors and 429 Too Many Requests.
-     * <p>401 Unauthorized and 403 Forbidden errors are NOT retried — they indicate
-     * an invalid/expired token or insufficient permissions and require manual
-     * intervention (re-provisioning the service user token with correct permissions).</p>
+     * <p>401 Unauthorized and 403 Forbidden errors are NOT retried.</p>
      */
     private boolean isRetryable(Throwable throwable) {
         if (throwable instanceof WebClientResponseException ex) {
             int status = ex.getStatusCode().value();
-            // 401/403 are not retryable: token is invalid/expired or lacks permissions
             return status >= 500 || status == 429;
         }
         return false;
