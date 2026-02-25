@@ -2,6 +2,14 @@
   flex: 1 1 auto;
 }
 
+.endpoint-count {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.15);
+  margin-right: 12px;
+}
+
 .connection-indicator {
   display: flex;
   align-items: center;
@@ -40,7 +48,7 @@
 
 .kpi-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -49,28 +57,75 @@
   text-align: center;
 
   .kpi-value {
-    font-size: 48px;
+    font-size: 42px;
     font-weight: 700;
     display: block;
     margin-top: 8px;
   }
 
-  &.kpi-active .kpi-value {
+  .kpi-sub {
+    font-size: 13px;
+    color: rgba(0, 0, 0, 0.54);
+    display: block;
+    margin-top: 4px;
+  }
+
+  &.kpi-running .kpi-value {
     color: #3f51b5;
   }
 
-  &.kpi-completed .kpi-value {
+  &.kpi-finished .kpi-value {
     color: #4caf50;
   }
 
   &.kpi-failed .kpi-value {
     color: #f44336;
   }
+
+  &.kpi-stopped .kpi-value {
+    color: #9e9e9e;
+  }
+
+  &.kpi-acu .kpi-value {
+    color: #ff9800;
+  }
+
+  .acu-bar {
+    margin-top: 12px;
+    border-radius: 4px;
+  }
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .metric-label {
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.6);
+  }
+
+  .metric-value {
+    font-size: 20px;
+    font-weight: 600;
+  }
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .chart-card {
-  margin-bottom: 24px;
-
   .chart-container {
     height: 300px;
     position: relative;
@@ -78,6 +133,8 @@
 }
 
 .table-card {
+  margin-bottom: 24px;
+
   mat-card-header {
     display: flex;
     align-items: center;
@@ -93,10 +150,26 @@
     width: 100%;
   }
 
+  .id-cell {
+    font-family: monospace;
+    font-size: 12px;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .no-data-row td {
     text-align: center;
     padding: 24px;
     color: rgba(0, 0, 0, 0.54);
     font-style: italic;
   }
+}
+
+.last-updated {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.4);
+  padding: 12px 0 24px;
 }

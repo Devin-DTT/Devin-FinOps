@@ -12,10 +12,16 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import reactor.core.Disposable;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -25,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * WebSocket handler that bridges the Devin API with connected frontend clients.
@@ -53,6 +60,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    /** In-memory cache of the latest API response per endpoint (key = endpoint name). */
+    private final Map<String, JsonNode> latestSnapshot = new ConcurrentHashMap<>();
+
+    private static final Path SNAPSHOT_DIR = Paths.get("data");
+    private static final Path SNAPSHOT_FILE = SNAPSHOT_DIR.resolve("latest-snapshot.json");
+    private static final ObjectMapper prettyMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -103,6 +117,9 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         }
 
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
+        AtomicInteger completedCount = new AtomicInteger(0);
+        int totalEndpoints = readEndpoints.size();
+
         for (EndpointDefinition endpoint : readEndpoints) {
             try {
                 Disposable subscription = devinApiClient
@@ -110,11 +127,24 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                         .collectList()
                         .subscribe(
                                 dataChunks -> {
-                                    String payload = buildPayload(endpoint.getName(), String.join("", dataChunks));
+                                    String rawData = String.join("", dataChunks);
+                                    String payload = buildPayload(endpoint.getName(), rawData);
+
+                                    // Cache the parsed response in memory
+                                    cacheEndpointData(endpoint.getName(), rawData);
+
                                     sendMessage(session, payload);
+
+                                    // Write snapshot after all endpoints have responded
+                                    if (completedCount.incrementAndGet() >= totalEndpoints) {
+                                        writeSnapshotToDisk();
+                                    }
                                 },
-                                error -> log.warn("Poll error for endpoint {}: {}",
-                                        endpoint.getName(), error.getMessage())
+                                error -> {
+                                    log.warn("Poll error for endpoint {}: {}",
+                                            endpoint.getName(), error.getMessage());
+                                    completedCount.incrementAndGet();
+                                }
                         );
 
                 activeSubscriptions
@@ -123,6 +153,7 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
             } catch (Exception e) {
                 log.error("Failed to poll endpoint {}: {}", endpoint.getName(), e.getMessage());
+                completedCount.incrementAndGet();
             }
         }
     }
@@ -161,6 +192,50 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 log.error("Failed to send message to session {}: {}", session.getId(), e.getMessage());
             }
         }
+    }
+
+    /**
+     * Caches the parsed JSON response for the given endpoint name.
+     */
+    private void cacheEndpointData(String endpointName, String rawData) {
+        try {
+            if (rawData != null && !rawData.isEmpty()) {
+                JsonNode parsed = objectMapper.readTree(rawData);
+                latestSnapshot.put(endpointName, parsed);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cache data for endpoint {}: {}", endpointName, e.getMessage());
+        }
+    }
+
+    /**
+     * Writes the current in-memory snapshot to data/latest-snapshot.json.
+     */
+    private void writeSnapshotToDisk() {
+        try {
+            if (!Files.exists(SNAPSHOT_DIR)) {
+                Files.createDirectories(SNAPSHOT_DIR);
+            }
+            ObjectNode snapshotNode = prettyMapper.createObjectNode();
+            snapshotNode.put("timestamp", System.currentTimeMillis());
+            ObjectNode endpointsNode = snapshotNode.putObject("endpoints");
+            for (Map.Entry<String, JsonNode> entry : latestSnapshot.entrySet()) {
+                endpointsNode.set(entry.getKey(), entry.getValue());
+            }
+            String json = prettyMapper.writeValueAsString(snapshotNode);
+            Files.writeString(SNAPSHOT_FILE, json,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            log.debug("Snapshot written to {}", SNAPSHOT_FILE);
+        } catch (Exception e) {
+            log.warn("Failed to write snapshot to disk: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Returns the latest cached snapshot (read-only view).
+     */
+    public Map<String, JsonNode> getLatestSnapshot() {
+        return Collections.unmodifiableMap(latestSnapshot);
     }
 
     /**
