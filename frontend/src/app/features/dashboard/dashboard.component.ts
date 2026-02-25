@@ -256,11 +256,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleSessions(data: Record<string, unknown>): void {
-    const resp = data as unknown as SessionsResponse;
-    const sessions: DevinSession[] = Array.isArray(resp.sessions) ? resp.sessions : [];
-
-    // If top-level is an array (some API variants)
-    const sessionList = Array.isArray(data) ? (data as DevinSession[]) : sessions;
+    // The Devin API returns sessions in an 'items' array (paginated response)
+    let sessionList: DevinSession[];
+    if (Array.isArray(data)) {
+      sessionList = data as DevinSession[];
+    } else if (Array.isArray(data['items'])) {
+      sessionList = data['items'] as DevinSession[];
+    } else {
+      const resp = data as unknown as SessionsResponse;
+      sessionList = Array.isArray(resp.sessions) ? resp.sessions : [];
+    }
 
     this.state.sessions = sessionList;
     this.state.totalSessions = sessionList.length;
@@ -291,7 +296,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleDailyConsumption(data: Record<string, unknown>): void {
-    const entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
+    // The API returns 'consumption_by_date' with {date: epoch, acus: number}
+    let entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
+    if (entries.length === 0) {
+      const rawEntries = this.extractArray<Record<string, unknown>>(data, 'consumption_by_date');
+      entries = rawEntries.map(e => ({
+        date: typeof e['date'] === 'number'
+          ? new Date((e['date'] as number) * 1000).toISOString().split('T')[0]
+          : String(e['date'] ?? ''),
+        acu_consumed: (e['acus'] as number) ?? 0
+      }));
+    }
     this.state.dailyConsumption = entries;
     this.updateAcuChart(entries);
   }
@@ -335,18 +350,25 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleHypervisors(data: Record<string, unknown>): void {
+    // API returns paginated { items: [...], total: N }
     const list = this.extractArray<unknown>(data, 'hypervisors');
-    this.state.hypervisorCount = list.length;
+    this.state.hypervisorCount = list.length > 0 ? list.length
+      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
   }
 
   private handleOrganizations(data: Record<string, unknown>): void {
+    // API returns paginated { items: [...], total: N }
     const list = this.extractArray<unknown>(data, 'organizations');
-    this.state.orgCount = list.length;
+    this.state.orgCount = list.length > 0 ? list.length
+      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
   }
 
   private handleUsers(data: Record<string, unknown>): void {
+    // API returns paginated { items: [...], total: N }
+    // Per user note: total is at response.total, NOT response.items.total
     const list = this.extractArray<unknown>(data, 'users');
-    this.state.userCount = list.length;
+    this.state.userCount = list.length > 0 ? list.length
+      : (typeof data['total'] === 'number' ? (data['total'] as number) : 0);
   }
 
   // --- Helpers ---
@@ -369,9 +391,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private extractMetricCount(data: Record<string, unknown>): number {
-    // Metric endpoints may return { count: N }, { value: N }, or { data: [...] }
+    // Metric endpoints may return { count: N }, { value: N }, { data: [...] },
+    // or an array of { active_users: N } time-series entries
     if (typeof data['count'] === 'number') return data['count'] as number;
     if (typeof data['value'] === 'number') return data['value'] as number;
+    // Handle array of time-series entries (DAU/WAU/MAU return [{active_users: N}, ...])
+    if (Array.isArray(data)) {
+      const entries = data as Record<string, unknown>[];
+      if (entries.length > 0) {
+        const last = entries[entries.length - 1];
+        return (last['active_users'] as number) ?? (last['count'] as number) ?? (last['value'] as number) ?? 0;
+      }
+      return 0;
+    }
     const arr = this.extractArray<MetricDataPoint>(data, 'data');
     if (arr.length > 0) {
       const last = arr[arr.length - 1];
