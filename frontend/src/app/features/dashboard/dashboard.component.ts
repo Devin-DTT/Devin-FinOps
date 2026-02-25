@@ -268,7 +268,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
 
     this.state.sessions = sessionList;
-    this.state.totalSessions = typeof data['total'] === 'number' ? (data['total'] as number) : sessionList.length;
+    // Use page length for totalSessions so it stays consistent with status breakdown counts.
+    // Both total and breakdown are derived from the same sessionList (current page).
+    // Full pagination (fetching all pages) would require backend-side aggregation.
+    this.state.totalSessions = sessionList.length;
     this.state.runningSessions = sessionList.filter(s => s.status === 'running').length;
     this.state.finishedSessions = sessionList.filter(s => s.status === 'finished').length;
     this.state.failedSessions = sessionList.filter(s => s.status === 'failed').length;
@@ -396,24 +399,36 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private extractMetricCount(data: Record<string, unknown>): number {
     // Metric endpoints may return { count: N }, { value: N }, { data: [...] },
-    // or an array of { active_users: N } time-series entries
+    // a bare array of time-series entries, or a paginated { items: [...], total: N }
     if (typeof data['count'] === 'number') return data['count'] as number;
     if (typeof data['value'] === 'number') return data['value'] as number;
-    // Handle array of time-series entries (DAU/WAU/MAU return [{active_users: N}, ...])
+    // Handle bare array of time-series entries (DAU/WAU/MAU may return [{active_users: N}, ...])
     if (Array.isArray(data)) {
-      const entries = data as Record<string, unknown>[];
-      if (entries.length > 0) {
-        const last = entries[entries.length - 1];
-        return (last['active_users'] as number) ?? (last['count'] as number) ?? (last['value'] as number) ?? 0;
-      }
-      return 0;
+      return this.extractLastMetricFromArray(data as Record<string, unknown>[]);
     }
-    const arr = this.extractArray<MetricDataPoint>(data, 'data');
+    // Handle paginated object { items: [...], total: N } or { data: [...] }
+    const arr = Array.isArray(data['items'])
+      ? data['items'] as Record<string, unknown>[]
+      : (Array.isArray(data['data']) ? data['data'] as Record<string, unknown>[] : []);
     if (arr.length > 0) {
-      const last = arr[arr.length - 1];
+      return this.extractLastMetricFromArray(arr);
+    }
+    // Final fallback via extractArray's greedy heuristic
+    const fallback = this.extractArray<MetricDataPoint>(data, 'data');
+    if (fallback.length > 0) {
+      const last = fallback[fallback.length - 1];
       return (last.count ?? last.value) ?? 0;
     }
     return 0;
+  }
+
+  private extractLastMetricFromArray(entries: Record<string, unknown>[]): number {
+    if (entries.length === 0) return 0;
+    const last = entries[entries.length - 1];
+    return (last['active_users'] as number)
+      ?? (last['count'] as number)
+      ?? (last['value'] as number)
+      ?? 0;
   }
 
   private applyFilter(): void {
