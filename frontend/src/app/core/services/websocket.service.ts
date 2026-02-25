@@ -2,7 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { Observable, Subject, timer, EMPTY } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
-import { DevinData } from '../../models/devin-data.model';
+import { WebSocketMessage } from '../../models/devin-data.model';
 import { environment } from '../../../environments/environment';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
@@ -11,15 +11,15 @@ export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
   providedIn: 'root'
 })
 export class WebSocketService implements OnDestroy {
-  private socket$: WebSocketSubject<DevinData> | null = null;
-  private dataSubject$ = new Subject<DevinData>();
+  private socket$: WebSocketSubject<WebSocketMessage> | null = null;
+  private dataSubject$ = new Subject<WebSocketMessage>();
   private connectionStatusSubject$ = new Subject<ConnectionStatus>();
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 10;
   private readonly initialReconnectDelay = 1000;
   private isDestroyed = false;
 
-  readonly data$: Observable<DevinData> = this.dataSubject$.asObservable();
+  readonly data$: Observable<WebSocketMessage> = this.dataSubject$.asObservable();
   readonly connectionStatus$: Observable<ConnectionStatus> = this.connectionStatusSubject$.asObservable();
 
   constructor() {
@@ -33,7 +33,7 @@ export class WebSocketService implements OnDestroy {
 
     this.connectionStatusSubject$.next('connecting');
 
-    this.socket$ = webSocket<DevinData>({
+    this.socket$ = webSocket<WebSocketMessage>({
       url: environment.wsUrl,
       openObserver: {
         next: () => {
@@ -57,8 +57,8 @@ export class WebSocketService implements OnDestroy {
         return EMPTY;
       })
     ).subscribe({
-      next: (data: DevinData) => {
-        this.dataSubject$.next(data);
+      next: (msg: WebSocketMessage) => {
+        this.dataSubject$.next(msg);
       },
       error: (error) => {
         console.error('WebSocket subscription error:', error);

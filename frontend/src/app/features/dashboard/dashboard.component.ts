@@ -11,12 +11,23 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatSort, MatSortModule } from '@angular/material/sort';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { BaseChartDirective } from 'ng2-charts';
 import { ChartConfiguration, ChartData } from 'chart.js';
 
 import { WebSocketService, ConnectionStatus } from '../../core/services/websocket.service';
-import { DevinData, DevinSession, SessionStatus } from '../../models/devin-data.model';
+import {
+  WebSocketMessage,
+  DevinSession,
+  SessionStatus,
+  SessionsResponse,
+  DashboardState,
+  BillingCycle,
+  DailyConsumption,
+  MetricDataPoint
+} from '../../models/devin-data.model';
 
 @Component({
   selector: 'app-dashboard',
@@ -32,6 +43,8 @@ import { DevinData, DevinSession, SessionStatus } from '../../models/devin-data.
     MatIconModule,
     MatToolbarModule,
     MatSortModule,
+    MatProgressBarModule,
+    MatTooltipModule,
     BaseChartDirective
   ],
   templateUrl: './dashboard.component.html',
@@ -40,25 +53,48 @@ import { DevinData, DevinSession, SessionStatus } from '../../models/devin-data.
 export class DashboardComponent implements OnInit, OnDestroy {
   @ViewChild(MatSort) sort!: MatSort;
 
-  displayedColumns: string[] = ['id', 'status', 'startDate', 'duration'];
+  displayedColumns: string[] = ['session_id', 'title', 'status', 'origin', 'created_at'];
   dataSource = new MatTableDataSource<DevinSession>([]);
   connectionStatus: ConnectionStatus = 'disconnected';
 
-  totalSessions = 0;
-  activeSessions = 0;
-  completedSessions = 0;
-  failedSessions = 0;
+  // Dashboard state aggregated from all endpoints
+  state: DashboardState = {
+    totalSessions: 0,
+    runningSessions: 0,
+    finishedSessions: 0,
+    failedSessions: 0,
+    stoppedSessions: 0,
+    sessions: [],
+    currentCycleAcu: 0,
+    currentCycleLimit: 0,
+    billingCycles: [],
+    dailyConsumption: [],
+    dauCount: 0,
+    wauCount: 0,
+    mauCount: 0,
+    sessionsMetrics: [],
+    prsMetrics: [],
+    usageMetrics: [],
+    queueStatus: 'unknown',
+    hypervisorCount: 0,
+    orgCount: 0,
+    userCount: 0,
+    lastUpdated: 0
+  };
 
   selectedStatusFilter: SessionStatus | 'all' = 'all';
-  statusOptions: Array<SessionStatus | 'all'> = ['all', 'active', 'completed', 'failed', 'pending'];
+  statusOptions: Array<SessionStatus | 'all'> = ['all', 'running', 'finished', 'failed', 'stopped', 'suspended', 'blocked'];
 
-  // Chart configuration
+  // ACU usage percentage for progress bar
+  acuUsagePercent = 0;
+
+  // Chart: Active sessions over time
   lineChartData: ChartData<'line'> = {
     labels: [],
     datasets: [
       {
         data: [],
-        label: 'Active Sessions',
+        label: 'Running Sessions',
         fill: true,
         tension: 0.4,
         borderColor: '#3f51b5',
@@ -71,32 +107,49 @@ export class DashboardComponent implements OnInit, OnDestroy {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
-      x: {
-        title: { display: true, text: 'Time' }
-      },
-      y: {
-        title: { display: true, text: 'Active Sessions' },
-        beginAtZero: true
-      }
+      x: { title: { display: true, text: 'Time' } },
+      y: { title: { display: true, text: 'Running Sessions' }, beginAtZero: true }
     },
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top'
-      }
-    }
+    plugins: { legend: { display: true, position: 'top' } }
   };
+
+  // Chart: Daily ACU consumption
+  acuChartData: ChartData<'line'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'ACU Consumed',
+        fill: true,
+        tension: 0.4,
+        borderColor: '#ff9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)'
+      }
+    ]
+  };
+
+  acuChartOptions: ChartConfiguration<'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Date' } },
+      y: { title: { display: true, text: 'ACU' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  endpointsReceived = new Set<string>();
 
   private dataSubscription: Subscription | null = null;
   private statusSubscription: Subscription | null = null;
   private chartHistory: { time: string; count: number }[] = [];
-  private readonly maxChartPoints = 20;
+  private readonly maxChartPoints = 30;
 
   constructor(private wsService: WebSocketService) {}
 
   ngOnInit(): void {
-    this.dataSubscription = this.wsService.data$.subscribe((data: DevinData) => {
-      this.updateDashboard(data);
+    this.dataSubscription = this.wsService.data$.subscribe((msg: WebSocketMessage) => {
+      this.processMessage(msg);
     });
 
     this.statusSubscription = this.wsService.connectionStatus$.subscribe((status: ConnectionStatus) => {
@@ -114,35 +167,217 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   getStatusColor(status: SessionStatus): string {
-    const colorMap: Record<SessionStatus, string> = {
-      active: 'primary',
-      completed: 'accent',
+    const colorMap: Record<string, string> = {
+      running: 'primary',
+      finished: 'accent',
       failed: 'warn',
-      pending: ''
+      stopped: '',
+      suspended: '',
+      blocked: 'warn',
+      unknown: ''
     };
     return colorMap[status] || '';
   }
 
-  formatDuration(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  getQueueStatusColor(): string {
+    const status = this.state.queueStatus?.toLowerCase();
+    if (status === 'normal') return 'accent';
+    if (status === 'elevated') return '';
+    if (status === 'high') return 'warn';
+    return '';
   }
 
-  private updateDashboard(data: DevinData): void {
-    this.totalSessions = data.totalSessions;
-    this.activeSessions = data.activeSessions;
-    this.completedSessions = data.completedSessions;
-    this.failedSessions = data.failedSessions;
+  formatTimestamp(isoString: string): string {
+    if (!isoString) return '-';
+    const d = new Date(isoString);
+    return d.toLocaleString();
+  }
 
-    this.dataSource.data = data.sessions;
+  /**
+   * Route each incoming WebSocket message to the appropriate handler
+   * based on the endpoint name.
+   */
+  private processMessage(msg: WebSocketMessage): void {
+    if (msg.type !== 'data' || !msg.data) return;
+
+    this.endpointsReceived.add(msg.endpoint);
+    this.state.lastUpdated = msg.timestamp;
+
+    const data = msg.data as Record<string, unknown>;
+
+    switch (msg.endpoint) {
+      case 'list_sessions':
+      case 'list_enterprise_sessions':
+        this.handleSessions(data);
+        break;
+      case 'list_billing_cycles':
+        this.handleBillingCycles(data);
+        break;
+      case 'get_daily_consumption':
+        this.handleDailyConsumption(data);
+        break;
+      case 'get_acu_limits':
+        this.handleAcuLimits(data);
+        break;
+      case 'get_dau_metrics':
+        this.handleDauMetrics(data);
+        break;
+      case 'get_wau_metrics':
+        this.handleWauMetrics(data);
+        break;
+      case 'get_mau_metrics':
+        this.handleMauMetrics(data);
+        break;
+      case 'get_sessions_metrics':
+        this.handleSessionsMetrics(data);
+        break;
+      case 'get_prs_metrics':
+        this.handlePrsMetrics(data);
+        break;
+      case 'get_usage_metrics':
+        this.handleUsageMetrics(data);
+        break;
+      case 'get_queue_status':
+        this.handleQueueStatus(data);
+        break;
+      case 'list_hypervisors':
+        this.handleHypervisors(data);
+        break;
+      case 'list_organizations':
+        this.handleOrganizations(data);
+        break;
+      case 'list_users':
+        this.handleUsers(data);
+        break;
+      default:
+        // Other endpoints - log for debugging
+        break;
+    }
+  }
+
+  private handleSessions(data: Record<string, unknown>): void {
+    const resp = data as unknown as SessionsResponse;
+    const sessions: DevinSession[] = Array.isArray(resp.sessions) ? resp.sessions : [];
+
+    // If top-level is an array (some API variants)
+    const sessionList = Array.isArray(data) ? (data as DevinSession[]) : sessions;
+
+    this.state.sessions = sessionList;
+    this.state.totalSessions = sessionList.length;
+    this.state.runningSessions = sessionList.filter(s => s.status === 'running').length;
+    this.state.finishedSessions = sessionList.filter(s => s.status === 'finished').length;
+    this.state.failedSessions = sessionList.filter(s => s.status === 'failed').length;
+    this.state.stoppedSessions = sessionList.filter(s => s.status === 'stopped').length;
+
+    this.dataSource.data = sessionList;
     if (this.sort) {
       this.dataSource.sort = this.sort;
     }
     this.applyFilter();
+    this.updateSessionChart();
+  }
 
-    this.updateChart(data);
+  private handleBillingCycles(data: Record<string, unknown>): void {
+    const cycles = this.extractArray<BillingCycle>(data, 'cycles');
+    this.state.billingCycles = cycles;
+    if (cycles.length > 0) {
+      const current = cycles[cycles.length - 1];
+      this.state.currentCycleAcu = current.acu_usage ?? 0;
+      this.state.currentCycleLimit = current.acu_limit ?? 0;
+      this.acuUsagePercent = this.state.currentCycleLimit > 0
+        ? Math.round((this.state.currentCycleAcu / this.state.currentCycleLimit) * 100)
+        : 0;
+    }
+  }
+
+  private handleDailyConsumption(data: Record<string, unknown>): void {
+    const entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
+    this.state.dailyConsumption = entries;
+    this.updateAcuChart(entries);
+  }
+
+  private handleAcuLimits(data: Record<string, unknown>): void {
+    const limit = this.extractNumber(data, 'acu_limit') ?? this.extractNumber(data, 'limit');
+    if (limit !== null) {
+      this.state.currentCycleLimit = limit;
+      this.acuUsagePercent = this.state.currentCycleLimit > 0
+        ? Math.round((this.state.currentCycleAcu / this.state.currentCycleLimit) * 100)
+        : 0;
+    }
+  }
+
+  private handleDauMetrics(data: Record<string, unknown>): void {
+    this.state.dauCount = this.extractMetricCount(data);
+  }
+
+  private handleWauMetrics(data: Record<string, unknown>): void {
+    this.state.wauCount = this.extractMetricCount(data);
+  }
+
+  private handleMauMetrics(data: Record<string, unknown>): void {
+    this.state.mauCount = this.extractMetricCount(data);
+  }
+
+  private handleSessionsMetrics(data: Record<string, unknown>): void {
+    this.state.sessionsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+  }
+
+  private handlePrsMetrics(data: Record<string, unknown>): void {
+    this.state.prsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+  }
+
+  private handleUsageMetrics(data: Record<string, unknown>): void {
+    this.state.usageMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+  }
+
+  private handleQueueStatus(data: Record<string, unknown>): void {
+    this.state.queueStatus = (data['status'] as string) ?? 'unknown';
+  }
+
+  private handleHypervisors(data: Record<string, unknown>): void {
+    const list = this.extractArray<unknown>(data, 'hypervisors');
+    this.state.hypervisorCount = list.length;
+  }
+
+  private handleOrganizations(data: Record<string, unknown>): void {
+    const list = this.extractArray<unknown>(data, 'organizations');
+    this.state.orgCount = list.length;
+  }
+
+  private handleUsers(data: Record<string, unknown>): void {
+    const list = this.extractArray<unknown>(data, 'users');
+    this.state.userCount = list.length;
+  }
+
+  // --- Helpers ---
+
+  private extractArray<T>(data: Record<string, unknown>, key: string): T[] {
+    if (Array.isArray(data)) return data as T[];
+    const value = data[key];
+    if (Array.isArray(value)) return value as T[];
+    // Try first key that is an array
+    for (const k of Object.keys(data)) {
+      if (Array.isArray(data[k])) return data[k] as T[];
+    }
+    return [];
+  }
+
+  private extractNumber(data: Record<string, unknown>, key: string): number | null {
+    const val = data[key];
+    if (typeof val === 'number') return val;
+    return null;
+  }
+
+  private extractMetricCount(data: Record<string, unknown>): number {
+    // Metric endpoints may return { count: N }, { value: N }, or { data: [...] }
+    if (typeof data['count'] === 'number') return data['count'] as number;
+    if (typeof data['value'] === 'number') return data['value'] as number;
+    const arr = this.extractArray<MetricDataPoint>(data, 'data');
+    if (arr.length > 0) {
+      const last = arr[arr.length - 1];
+      return (last.count ?? last.value) ?? 0;
+    }
+    return 0;
   }
 
   private applyFilter(): void {
@@ -156,11 +391,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  private updateChart(data: DevinData): void {
-    const now = new Date(data.timestamp);
+  private updateSessionChart(): void {
+    const now = new Date();
     const timeLabel = now.toLocaleTimeString();
 
-    this.chartHistory.push({ time: timeLabel, count: data.activeSessions });
+    this.chartHistory.push({ time: timeLabel, count: this.state.runningSessions });
 
     if (this.chartHistory.length > this.maxChartPoints) {
       this.chartHistory.shift();
@@ -173,6 +408,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
         {
           ...this.lineChartData.datasets[0],
           data: this.chartHistory.map(h => h.count)
+        }
+      ]
+    };
+  }
+
+  private updateAcuChart(entries: DailyConsumption[]): void {
+    const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+    this.acuChartData = {
+      ...this.acuChartData,
+      labels: sorted.map(e => e.date),
+      datasets: [
+        {
+          ...this.acuChartData.datasets[0],
+          data: sorted.map(e => e.acu_consumed)
         }
       ]
     };
