@@ -18,7 +18,7 @@ import java.util.Map;
 /**
  * Reactive HTTP client for the Devin API.
  * Uses Spring WebFlux {@link WebClient} with Bearer token authentication
- * and exponential-backoff retry logic (max 3 attempts).
+ * from a Devin service user and exponential-backoff retry logic (max 3 attempts).
  */
 @Slf4j
 @Service
@@ -27,14 +27,24 @@ public class DevinApiClient {
     private final WebClient webClient;
 
     /**
-     * Constructs the client, injecting the API key from the environment variable
-     * {@code DEVIN_ENTERPRISE_API_KEY} and configuring it as a default Bearer header.
+     * Constructs the client, injecting the service user token from the environment variable
+     * {@code DEVIN_SERVICE_TOKEN} and configuring it as a default Bearer header.
      *
-     * @param apiKey the Devin Enterprise API key
+     * @param serviceToken the Devin service user token
+     * @throws IllegalStateException if the token is not configured
      */
-    public DevinApiClient(@Value("${DEVIN_ENTERPRISE_API_KEY}") String apiKey) {
+    public DevinApiClient(@Value("${DEVIN_SERVICE_TOKEN:}") String serviceToken) {
+        if (serviceToken == null || serviceToken.isBlank()) {
+            throw new IllegalStateException(
+                    "DEVIN_SERVICE_TOKEN is not configured. "
+                    + "Provision a Devin service user and set its token as DEVIN_SERVICE_TOKEN.");
+        }
+        if (serviceToken.length() < 20) {
+            log.warn("DEVIN_SERVICE_TOKEN appears too short ({} chars). "
+                    + "Verify that the correct service user token is configured.", serviceToken.length());
+        }
         this.webClient = WebClient.builder()
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + serviceToken)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/json")
                 .build();
@@ -60,6 +70,10 @@ public class DevinApiClient {
                 .uri(url)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
+                    log.error("Service user token is invalid or expired for endpoint {}", endpoint.getName());
+                    return Flux.error(ex);
+                })
                 .retryWhen(retrySpec(endpoint.getName()))
                 .doOnError(e -> log.error("Error calling endpoint {}: {}", endpoint.getName(), e.getMessage()));
     }
@@ -91,6 +105,10 @@ public class DevinApiClient {
         return headersSpec
                 .retrieve()
                 .bodyToMono(String.class)
+                .onErrorResume(WebClientResponseException.Unauthorized.class, ex -> {
+                    log.error("Service user token is invalid or expired for endpoint {}", endpoint.getName());
+                    return Mono.error(ex);
+                })
                 .retryWhen(retrySpec(endpoint.getName()))
                 .doOnError(e -> log.error("Error calling endpoint {}: {}", endpoint.getName(), e.getMessage()));
     }
@@ -114,10 +132,13 @@ public class DevinApiClient {
     /**
      * Determines whether the given throwable warrants a retry.
      * Returns true for 5xx server errors and 429 Too Many Requests.
+     * <p>401 Unauthorized errors are NOT retried — they indicate an invalid or expired
+     * service user token and require manual intervention (re-provisioning the token).</p>
      */
     private boolean isRetryable(Throwable throwable) {
         if (throwable instanceof WebClientResponseException ex) {
             int status = ex.getStatusCode().value();
+            // 401 is not retryable: service user token is invalid/expired, retrying won't help
             return status >= 500 || status == 429;
         }
         return false;
