@@ -1,4 +1,8 @@
 # FinOps Application Environment Variables
+# Copy this file to .envrc and fill in your tokens:
+#   cp .envrc.example .envrc
+#   direnv allow
+#
 # These variables are required for accessing Devin/Cognition services
 
 # Enterprise service user token for enterprise-scoped API endpoints.
@@ -9,7 +13,8 @@ export DEVIN_ENTERPRISE_SERVICE_TOKEN="your_enterprise_service_user_token_here"
 export DEVIN_ORG_SERVICE_TOKEN="your_org_service_user_token_here"
 
 # Organization ID for organization-scoped API endpoints.
-export DEVIN_ORG_ID="your_org_id_here"
+# Leave empty or remove to enable automatic multi-org discovery.
+export DEVIN_ORG_ID=""
 
 # Optional: Set default configuration values
 export FINOPS_PRICE_PER_ACU="0.05"
