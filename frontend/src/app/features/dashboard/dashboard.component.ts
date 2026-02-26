@@ -16,7 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
 
 import { BaseChartDirective } from 'ng2-charts';
-import { ChartConfiguration, ChartData, ChartOptions } from 'chart.js';
+import { ChartConfiguration, ChartData } from 'chart.js';
 
 import { WebSocketService, ConnectionStatus } from '../../core/services/websocket.service';
 import {
