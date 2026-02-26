@@ -7,6 +7,7 @@ import com.devin.dashboard.service.DevinApiClient;
 import com.devin.dashboard.service.OrgApiClient;
 import com.devin.dashboard.service.OrgDiscoveryService;
 import com.devin.dashboard.service.SnapshotService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -68,6 +69,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         this.snapshotService = snapshotService;
         this.orgDiscoveryService = orgDiscoveryService;
         this.properties = properties;
+        this.scheduler = Executors.newScheduledThreadPool(properties.getSchedulerPoolSize());
+    }
+
+    @PreDestroy
+    void shutdown() {
+        scheduler.shutdownNow();
+        log.info("WebSocket polling scheduler shut down.");
     }
 
     /** Tracks active polling tasks per session so they can be cancelled on disconnect. */
@@ -76,18 +84,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     /** Tracks active reactive subscriptions per session. */
     private final Map<String, List<Disposable>> activeSubscriptions = new ConcurrentHashMap<>();
 
-    private ScheduledExecutorService scheduler;
+    private final ScheduledExecutorService scheduler;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         log.info("WebSocket connected: sessionId={}", session.getId());
-
-        // Lazy-init the scheduler on first connection
-        if (scheduler == null) {
-            scheduler = Executors.newScheduledThreadPool(properties.getSchedulerPoolSize());
-        }
 
         long pollingInterval = properties.getPollingIntervalSeconds();
         ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(
@@ -146,11 +149,16 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         // Use cached org IDs from OrgDiscoveryService
         List<String> orgIds = orgDiscoveryService.getCachedOrgIds();
 
-        // Calculate total expected responses
+        // Whether org endpoints should be polled this cycle
+        boolean pollOrgEndpoints = orgApiClient.isAvailable() && !orgIds.isEmpty();
+
+        // Calculate total expected responses (must mirror the skip logic below)
         int totalEndpoints = 0;
         for (EndpointDefinition endpoint : readEndpoints) {
             if ("organization".equalsIgnoreCase(endpoint.getScope())) {
-                totalEndpoints += orgIds.size();
+                if (pollOrgEndpoints) {
+                    totalEndpoints += orgIds.size();
+                }
             } else {
                 totalEndpoints++;
             }
@@ -164,7 +172,7 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 String scope = endpoint.getScope();
 
                 if ("organization".equalsIgnoreCase(scope)) {
-                    if (!orgApiClient.isAvailable() || orgIds.isEmpty()) {
+                    if (!pollOrgEndpoints) {
                         // Org client not configured or no orgs discovered -- skip
                         continue;
                     }
