@@ -73,7 +73,7 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 |----------------------------------|----------|----------------------------------------------------------------|
 | `DEVIN_ENTERPRISE_SERVICE_TOKEN` | Yes      | Bearer token for enterprise-scoped API endpoints               |
 | `DEVIN_ORG_SERVICE_TOKEN`        | Yes      | Bearer token for organization-scoped API endpoints             |
-| `DEVIN_ORG_ID`                   | Yes      | Organization ID for organization-scoped API endpoints          |
+| `DEVIN_ORG_ID`                   | No       | Organization ID (optional -- leave blank for multi-org auto-discovery) |
 | `DEVIN_SERVICE_TOKEN`            | No       | Legacy alias for `DEVIN_ENTERPRISE_SERVICE_TOKEN` (deprecated) |
 | `FINOPS_PRICE_PER_ACU`           | No       | Price per ACU (default: `0.05`)                                |
 | `FINOPS_CURRENCY`                | No       | Currency code (default: `USD`)                                 |
@@ -82,11 +82,16 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 
 ```bash
 cd backend
-export DEVIN_ENTERPRISE_SERVICE_TOKEN="<enterprise_service_user_token>"
-export DEVIN_ORG_SERVICE_TOKEN="<org_service_user_token>"
-export DEVIN_ORG_ID="<your_org_id>"
+
+# First time: create .env from the template and fill in your tokens
+./setup-env.sh
+# Edit .env with your actual tokens
+
+# Start the backend (spring-dotenv loads backend/.env automatically)
 mvn spring-boot:run
 ```
+
+> **Note**: The `.env` file must be in the `backend/` directory (where Maven runs). `spring-dotenv` loads it automatically from the working directory.
 
 The backend starts on port **8080** by default.
 
@@ -105,10 +110,10 @@ The frontend starts on port **4200** and proxies API calls to the backend.
 On startup the backend validates that all required tokens and configuration are present:
 
 - `DEVIN_ENTERPRISE_SERVICE_TOKEN` must be set (falls back to `DEVIN_SERVICE_TOKEN` for backward compatibility).
-- `DEVIN_ORG_SERVICE_TOKEN` must be set.
-- `DEVIN_ORG_ID` must be set.
+- `DEVIN_ORG_SERVICE_TOKEN` must be set (if missing, organization-scoped endpoints are skipped gracefully).
+- `DEVIN_ORG_ID` is optional -- if not set, the system uses multi-org auto-discovery via `list_organizations`.
 
-If any required value is missing, the application will fail to start with a descriptive error message.
+If the enterprise token is missing, the application will fail to start with a descriptive error message.
 A warning is logged if any token appears suspiciously short (fewer than 20 characters).
 
 ## Error Handling
