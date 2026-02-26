@@ -405,13 +405,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleSessions(data: Record<string, unknown>): void {
-    const resp = data as unknown as SessionsResponse;
-    const sessions: DevinSession[] = Array.isArray(resp.sessions) ? resp.sessions : [];
-
-    // If top-level is an array (some API variants)
-    const sessionList = Array.isArray(data) ? (data as DevinSession[]) : sessions;
+    // The Devin API returns sessions in an 'items' array (paginated response)
+    let sessionList: DevinSession[];
+    if (Array.isArray(data)) {
+      sessionList = data as DevinSession[];
+    } else if (Array.isArray(data['items'])) {
+      sessionList = data['items'] as DevinSession[];
+    } else {
+      const resp = data as unknown as SessionsResponse;
+      sessionList = Array.isArray(resp.sessions) ? resp.sessions : [];
+    }
 
     this.state.sessions = sessionList;
+    // Use page length for totalSessions so it stays consistent with status breakdown counts.
+    // Both total and breakdown are derived from the same sessionList (current page).
+    // Full pagination (fetching all pages) would require backend-side aggregation.
     this.state.totalSessions = sessionList.length;
     this.state.runningSessions = sessionList.filter(s => s.status === 'running').length;
     this.state.finishedSessions = sessionList.filter(s => s.status === 'finished').length;
@@ -442,7 +450,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleDailyConsumption(data: Record<string, unknown>): void {
-    const entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
+    // Check for named keys directly (avoid extractArray's fallback picking up wrong array)
+    let entries: DailyConsumption[] = [];
+    if (Array.isArray(data['daily_consumption'])) {
+      entries = data['daily_consumption'] as DailyConsumption[];
+    } else if (Array.isArray(data['consumption_by_date'])) {
+      // The API returns 'consumption_by_date' with {date: epoch, acus: number}
+      const rawEntries = data['consumption_by_date'] as Record<string, unknown>[];
+      entries = rawEntries.map(e => ({
+        date: typeof e['date'] === 'number'
+          ? new Date((e['date'] as number) * 1000).toISOString().split('T')[0]
+          : String(e['date'] ?? ''),
+        acu_consumed: (e['acus'] as number) ?? 0
+      }));
+    } else {
+      entries = this.extractArray<DailyConsumption>(data, 'daily_consumption');
+    }
     this.state.dailyConsumption = entries;
     this.updateAcuChart(entries);
   }
@@ -498,18 +521,24 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleHypervisors(data: Record<string, unknown>): void {
-    const list = this.extractArray<unknown>(data, 'hypervisors');
-    this.state.hypervisorCount = list.length;
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.hypervisorCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'hypervisors').length;
   }
 
   private handleOrganizations(data: Record<string, unknown>): void {
-    const list = this.extractArray<unknown>(data, 'organizations');
-    this.state.orgCount = list.length;
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.orgCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'organizations').length;
   }
 
   private handleUsers(data: Record<string, unknown>): void {
-    const list = this.extractArray<unknown>(data, 'users');
-    this.state.userCount = list.length;
+    // API returns paginated { items: [...], total: N } — prefer total over page length
+    this.state.userCount = typeof data['total'] === 'number'
+      ? (data['total'] as number)
+      : this.extractArray<unknown>(data, 'users').length;
   }
 
   // --- Helpers ---
@@ -532,15 +561,37 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private extractMetricCount(data: Record<string, unknown>): number {
-    // Metric endpoints may return { count: N }, { value: N }, or { data: [...] }
+    // Metric endpoints may return { count: N }, { value: N }, { data: [...] },
+    // a bare array of time-series entries, or a paginated { items: [...], total: N }
     if (typeof data['count'] === 'number') return data['count'] as number;
     if (typeof data['value'] === 'number') return data['value'] as number;
-    const arr = this.extractArray<MetricDataPoint>(data, 'data');
+    // Handle bare array of time-series entries (DAU/WAU/MAU may return [{active_users: N}, ...])
+    if (Array.isArray(data)) {
+      return this.extractLastMetricFromArray(data as Record<string, unknown>[]);
+    }
+    // Handle paginated object { items: [...], total: N } or { data: [...] }
+    const arr = Array.isArray(data['items'])
+      ? data['items'] as Record<string, unknown>[]
+      : (Array.isArray(data['data']) ? data['data'] as Record<string, unknown>[] : []);
     if (arr.length > 0) {
-      const last = arr[arr.length - 1];
+      return this.extractLastMetricFromArray(arr);
+    }
+    // Final fallback via extractArray's greedy heuristic
+    const fallback = this.extractArray<MetricDataPoint>(data, 'data');
+    if (fallback.length > 0) {
+      const last = fallback[fallback.length - 1];
       return (last.count ?? last.value) ?? 0;
     }
     return 0;
+  }
+
+  private extractLastMetricFromArray(entries: Record<string, unknown>[]): number {
+    if (entries.length === 0) return 0;
+    const last = entries[entries.length - 1];
+    return (last['active_users'] as number)
+      ?? (last['count'] as number)
+      ?? (last['value'] as number)
+      ?? 0;
   }
 
   private applyFilter(): void {
