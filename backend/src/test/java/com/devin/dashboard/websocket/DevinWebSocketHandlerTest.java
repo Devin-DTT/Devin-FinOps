@@ -1,8 +1,11 @@
 package com.devin.dashboard.websocket;
 
+import com.devin.dashboard.config.DashboardProperties;
 import com.devin.dashboard.config.EndpointLoader;
 import com.devin.dashboard.service.DevinApiClient;
 import com.devin.dashboard.service.OrgApiClient;
+import com.devin.dashboard.service.OrgDiscoveryService;
+import com.devin.dashboard.service.SnapshotService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +33,9 @@ class DevinWebSocketHandlerTest {
     private DevinApiClient devinApiClient;
     private OrgApiClient orgApiClient;
     private EndpointLoader endpointLoader;
+    private SnapshotService snapshotService;
+    private OrgDiscoveryService orgDiscoveryService;
+    private DashboardProperties properties;
     private DevinWebSocketHandler handler;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -38,11 +44,15 @@ class DevinWebSocketHandlerTest {
         devinApiClient = Mockito.mock(DevinApiClient.class);
         orgApiClient = Mockito.mock(OrgApiClient.class);
         endpointLoader = Mockito.mock(EndpointLoader.class);
+        snapshotService = new SnapshotService();
+        orgDiscoveryService = Mockito.mock(OrgDiscoveryService.class);
+        properties = new DashboardProperties();
 
         // Single-org mode to avoid background scheduler issues
         when(orgApiClient.getOrgId()).thenReturn(Optional.of("test-org-123"));
 
-        handler = new DevinWebSocketHandler(devinApiClient, orgApiClient, endpointLoader);
+        handler = new DevinWebSocketHandler(devinApiClient, orgApiClient, endpointLoader,
+                snapshotService, orgDiscoveryService, properties);
     }
 
     @Test
@@ -109,21 +119,13 @@ class DevinWebSocketHandlerTest {
     }
 
     @Test
-    @DisplayName("writeSnapshotToDisk() creates data/latest-snapshot.json")
+    @DisplayName("SnapshotService.writeSnapshotToDisk() creates data/latest-snapshot.json")
     void writeSnapshotToDiskCreatesFile(@TempDir Path tempDir) throws Exception {
-        // Use reflection to call the private writeSnapshotToDisk method
-        // First, cache some data
-        Method cacheMethod = DevinWebSocketHandler.class.getDeclaredMethod(
-                "cacheEndpointData", String.class, String.class);
-        cacheMethod.setAccessible(true);
-        cacheMethod.invoke(handler, "test_endpoint", "{\"status\":\"ok\"}");
+        // Cache some data via SnapshotService
+        snapshotService.cacheEndpointData("test_endpoint", "{\"status\":\"ok\"}");
 
-        // The writeSnapshotToDisk writes to a relative path "data/latest-snapshot.json"
-        // which is relative to the working directory.
-        Method writeMethod = DevinWebSocketHandler.class.getDeclaredMethod(
-                "writeSnapshotToDisk");
-        writeMethod.setAccessible(true);
-        writeMethod.invoke(handler);
+        // Write snapshot to disk
+        snapshotService.writeSnapshotToDisk();
 
         // Verify the file was created (in the current working directory)
         Path snapshotFile = Path.of("data", "latest-snapshot.json");
@@ -138,8 +140,8 @@ class DevinWebSocketHandlerTest {
     }
 
     @Test
-    @DisplayName("getLatestSnapshot() returns unmodifiable map")
+    @DisplayName("SnapshotService.getLatestSnapshot() returns unmodifiable map")
     void getLatestSnapshotReturnsUnmodifiableMap() {
-        assertNotNull(handler.getLatestSnapshot());
+        assertNotNull(snapshotService.getLatestSnapshot());
     }
 }
