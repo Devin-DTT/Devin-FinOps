@@ -72,7 +72,7 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 | Variable                         | Required | Description                                                    |
 |----------------------------------|----------|----------------------------------------------------------------|
 | `DEVIN_ENTERPRISE_SERVICE_TOKEN` | Yes      | Bearer token for enterprise-scoped API endpoints               |
-| `DEVIN_ORG_SERVICE_TOKEN`        | Yes      | Bearer token for organization-scoped API endpoints             |
+| `DEVIN_ORG_SERVICE_TOKEN`        | No       | Bearer token for organization-scoped API endpoints (skipped if missing) |
 | `DEVIN_ORG_ID`                   | No       | Organization ID (optional -- leave blank for multi-org auto-discovery) |
 | `DEVIN_SERVICE_TOKEN`            | No       | Legacy alias for `DEVIN_ENTERPRISE_SERVICE_TOKEN` (deprecated) |
 | `FINOPS_PRICE_PER_ACU`           | No       | Price per ACU (default: `0.05`)                                |
