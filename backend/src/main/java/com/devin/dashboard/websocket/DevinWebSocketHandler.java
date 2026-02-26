@@ -25,8 +25,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -58,6 +60,16 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         this.devinApiClient = devinApiClient;
         this.orgApiClient = orgApiClient;
         this.endpointLoader = endpointLoader;
+
+        // If multi-org mode, start async org discovery that refreshes every 60 seconds
+        if (orgApiClient.getOrgId().isEmpty()) {
+            orgDiscoveryExecutor.scheduleAtFixedRate(
+                    this::refreshOrgIds, 0, 60, TimeUnit.SECONDS);
+        } else {
+            // Single-org: use configured value, mark as initialized
+            this.cachedOrgIds = List.of(orgApiClient.getOrgId().get());
+            this.orgDiscoveryInitialized = true;
+        }
     }
 
     /** Tracks active polling tasks per session so they can be cancelled on disconnect. */
@@ -68,10 +80,19 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
+    /** Single-thread executor for asynchronous org discovery (avoids blocking scheduler threads). */
+    private final ScheduledExecutorService orgDiscoveryExecutor = Executors.newSingleThreadScheduledExecutor();
+
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /** In-memory cache of the latest API response per endpoint (key = endpoint name). */
     private final Map<String, JsonNode> latestSnapshot = new ConcurrentHashMap<>();
+
+    /** Cached list of discovered organization IDs (refreshed every 60 seconds). */
+    private volatile List<String> cachedOrgIds = Collections.emptyList();
+
+    /** Whether the initial org discovery has completed at least once. */
+    private volatile boolean orgDiscoveryInitialized = false;
 
     private static final Path SNAPSHOT_DIR = Paths.get("data");
     private static final Path SNAPSHOT_FILE = SNAPSHOT_DIR.resolve("latest-snapshot.json");
@@ -111,6 +132,14 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     /**
      * Polls all GET endpoints from the configuration and sends results to the WebSocket session.
+     *
+     * <p>For organization-scoped endpoints, the handler supports two modes:</p>
+     * <ul>
+     *   <li><b>Single-org mode</b>: if {@code DEVIN_ORG_ID} is configured, uses that ID directly.</li>
+     *   <li><b>Multi-org mode</b>: uses cached org IDs (refreshed asynchronously every 60s via
+     *       {@code list_organizations}) and iterates over each one. The {@code org_id} is included
+     *       as a separate field in the JSON payload to maintain frontend compatibility.</li>
+     * </ul>
      */
     private void pollEndpoints(WebSocketSession session) {
         if (!session.isOpen()) {
@@ -126,48 +155,64 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         }
 
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
+
+        // Use cached org IDs (refreshed asynchronously every 60s)
+        List<String> orgIds = cachedOrgIds;
+
+        // Calculate total expected responses
+        int totalEndpoints = 0;
+        for (EndpointDefinition endpoint : readEndpoints) {
+            if ("organization".equalsIgnoreCase(endpoint.getScope())) {
+                totalEndpoints += orgIds.size();
+            } else {
+                totalEndpoints++;
+            }
+        }
+
         AtomicInteger completedCount = new AtomicInteger(0);
-        int totalEndpoints = readEndpoints.size();
+        int finalTotalEndpoints = totalEndpoints;
 
         for (EndpointDefinition endpoint : readEndpoints) {
             try {
-                // Route to the correct API client based on endpoint scope
                 String scope = endpoint.getScope();
-                Flux<String> responseFlux;
+
                 if ("organization".equalsIgnoreCase(scope)) {
-                    responseFlux = orgApiClient.get(endpoint,
-                            Map.of("org_id", orgApiClient.getOrgId()));
+                    if (orgIds.isEmpty()) {
+                        // No orgs available, skip organization endpoints
+                        continue;
+                    }
+                    // Iterate over each discovered org
+                    for (String currentOrgId : orgIds) {
+                        pollOrgEndpoint(session, endpoint, currentOrgId,
+                                completedCount, finalTotalEndpoints);
+                    }
                 } else {
-                    responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
-                }
+                    // Enterprise-scoped endpoint
+                    Flux<String> responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
 
-                Disposable subscription = responseFlux
-                        .collectList()
-                        .subscribe(
-                                dataChunks -> {
-                                    String rawData = String.join("", dataChunks);
-                                    String payload = buildPayload(endpoint.getName(), rawData);
-
-                                    // Cache the parsed response in memory
-                                    cacheEndpointData(endpoint.getName(), rawData);
-
-                                    sendMessage(session, payload);
-
-                                    // Write snapshot after all endpoints have responded
-                                    if (completedCount.incrementAndGet() >= totalEndpoints) {
-                                        writeSnapshotToDisk();
+                    Disposable subscription = responseFlux
+                            .collectList()
+                            .subscribe(
+                                    dataChunks -> {
+                                        String rawData = String.join("", dataChunks);
+                                        String payload = buildPayload(endpoint.getName(), rawData);
+                                        cacheEndpointData(endpoint.getName(), rawData);
+                                        sendMessage(session, payload);
+                                        if (completedCount.incrementAndGet() >= finalTotalEndpoints) {
+                                            writeSnapshotToDisk();
+                                        }
+                                    },
+                                    error -> {
+                                        log.warn("Poll error for endpoint {}: {}",
+                                                endpoint.getName(), error.getMessage());
+                                        completedCount.incrementAndGet();
                                     }
-                                },
-                                error -> {
-                                    log.warn("Poll error for endpoint {}: {}",
-                                            endpoint.getName(), error.getMessage());
-                                    completedCount.incrementAndGet();
-                                }
-                        );
+                            );
 
-                activeSubscriptions
-                        .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
-                        .add(subscription);
+                    activeSubscriptions
+                            .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
+                            .add(subscription);
+                }
 
             } catch (Exception e) {
                 log.error("Failed to poll endpoint {}: {}", endpoint.getName(), e.getMessage());
@@ -177,14 +222,138 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
+     * Polls a single organization-scoped endpoint for a specific org ID.
+     *
+     * <p>The WebSocket message uses the original endpoint name (e.g. {@code list_sessions})
+     * for frontend compatibility, with {@code org_id} included as a separate field in the
+     * JSON payload. The cache key includes the org ID suffix for snapshot differentiation.</p>
+     */
+    private void pollOrgEndpoint(WebSocketSession session, EndpointDefinition endpoint,
+                                 String currentOrgId, AtomicInteger completedCount, int totalEndpoints) {
+        Map<String, String> pathParams = new HashMap<>();
+        pathParams.put("org_id", currentOrgId);
+
+        Flux<String> responseFlux = orgApiClient.get(endpoint, pathParams);
+
+        // Cache key includes org ID for snapshot differentiation in multi-org mode
+        boolean multiOrg = orgApiClient.getOrgId().isEmpty();
+        String cacheKey = multiOrg
+                ? endpoint.getName() + "__org_" + currentOrgId
+                : endpoint.getName();
+
+        Disposable subscription = responseFlux
+                .collectList()
+                .subscribe(
+                        dataChunks -> {
+                            String rawData = String.join("", dataChunks);
+                            // Use original endpoint name for frontend switch compatibility;
+                            // include org_id as separate field in the JSON payload
+                            String payload = buildPayload(endpoint.getName(), rawData, currentOrgId);
+                            cacheEndpointData(cacheKey, rawData);
+                            sendMessage(session, payload);
+                            if (completedCount.incrementAndGet() >= totalEndpoints) {
+                                writeSnapshotToDisk();
+                            }
+                        },
+                        error -> {
+                            log.warn("Poll error for endpoint {} (org {}): {}",
+                                    endpoint.getName(), currentOrgId, error.getMessage());
+                            completedCount.incrementAndGet();
+                        }
+                );
+
+        activeSubscriptions
+                .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
+                .add(subscription);
+    }
+
+    /**
+     * Asynchronously refreshes the cached list of organization IDs.
+     * Runs on a dedicated single-thread executor every 60 seconds to avoid
+     * blocking the WebSocket polling scheduler threads.
+     */
+    private void refreshOrgIds() {
+        Optional<EndpointDefinition> listOrgsEndpoint = endpointLoader.findByName("list_organizations");
+        if (listOrgsEndpoint.isEmpty()) {
+            log.warn("list_organizations endpoint not found in endpoints.yaml. "
+                    + "Cannot auto-discover organizations. Skipping organization-scoped endpoints.");
+            orgDiscoveryInitialized = true;
+            return;
+        }
+
+        try {
+            String responseBody = devinApiClient.get(listOrgsEndpoint.get(), Collections.emptyMap())
+                    .collectList()
+                    .map(chunks -> String.join("", chunks))
+                    .block(java.time.Duration.ofSeconds(10));
+
+            if (responseBody == null || responseBody.isBlank()) {
+                log.warn("list_organizations returned empty response. Keeping previous cached org IDs.");
+                orgDiscoveryInitialized = true;
+                return;
+            }
+
+            JsonNode root = objectMapper.readTree(responseBody);
+            List<String> orgIds = new ArrayList<>();
+
+            // Try common JSON structures: items[], organizations[], or root array
+            JsonNode itemsNode = root.has("items") ? root.get("items")
+                    : root.has("organizations") ? root.get("organizations")
+                    : root.isArray() ? root : null;
+
+            if (itemsNode != null && itemsNode.isArray()) {
+                for (JsonNode orgNode : itemsNode) {
+                    // Try "id" first, then "org_id"
+                    JsonNode idNode = orgNode.has("id") ? orgNode.get("id")
+                            : orgNode.has("org_id") ? orgNode.get("org_id") : null;
+                    if (idNode != null && !idNode.asText().isBlank()) {
+                        orgIds.add(idNode.asText());
+                    }
+                }
+            }
+
+            if (orgIds.isEmpty()) {
+                log.warn("list_organizations returned no org IDs. Response: {}",
+                        responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody);
+            } else {
+                log.info("Auto-discovered {} organization(s): {}", orgIds.size(), orgIds);
+                this.cachedOrgIds = List.copyOf(orgIds);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to call list_organizations for multi-org discovery: {}", e.getMessage());
+        } finally {
+            orgDiscoveryInitialized = true;
+        }
+    }
+
+    /**
      * Builds a JSON payload wrapping the endpoint data using Jackson for proper serialization.
      */
     private String buildPayload(String endpointName, String data) {
+        return buildPayload(endpointName, data, null);
+    }
+
+    /**
+     * Builds a JSON payload wrapping the endpoint data, optionally including an org_id field.
+     *
+     * <p>The {@code endpoint} field always uses the original endpoint name (e.g. {@code list_sessions})
+     * so the frontend switch statement can match it. The optional {@code org_id} field allows the
+     * frontend to differentiate data from different organizations in multi-org mode.</p>
+     *
+     * @param endpointName the original endpoint name (unchanged for frontend compatibility)
+     * @param data         the raw JSON response body
+     * @param orgId        the organization ID (null for enterprise-scoped endpoints)
+     */
+    private String buildPayload(String endpointName, String data, String orgId) {
         try {
             ObjectNode node = objectMapper.createObjectNode();
             node.put("type", "data");
             node.put("endpoint", endpointName);
             node.put("timestamp", System.currentTimeMillis());
+            if (orgId != null && !orgId.isBlank()) {
+                node.put("org_id", orgId);
+            }
             if (data.isEmpty()) {
                 node.putNull("data");
             } else {

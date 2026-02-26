@@ -15,6 +15,7 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Reactive HTTP client for organization-scoped Devin API endpoints.
@@ -23,6 +24,10 @@ import java.util.Map;
  *
  * <p>Organization endpoints use the base URL {@code https://api.devin.ai/v3/organizations/{org_id}/...}
  * and require a separate token from enterprise endpoints.</p>
+ *
+ * <p>The organization ID ({@code DEVIN_ORG_ID}) is now optional. When not configured,
+ * the backend will auto-discover organizations via the enterprise {@code list_organizations}
+ * endpoint and iterate over each one.</p>
  */
 @Slf4j
 @Service
@@ -30,16 +35,21 @@ public class OrgApiClient {
 
     private final WebClient webClient;
 
+    /**
+     * Optional org ID. When present, acts as a single-org fallback
+     * (skips calling list_organizations). When absent, the handler
+     * will discover orgs dynamically.
+     */
     @Getter
-    private final String orgId;
+    private final Optional<String> orgId;
 
     /**
      * Constructs the organization API client, injecting the org service user token
-     * and org ID from environment variables.
+     * and (optionally) the org ID from environment variables.
      *
      * @param orgServiceToken the organization service user token (DEVIN_ORG_SERVICE_TOKEN)
-     * @param orgId           the organization ID (DEVIN_ORG_ID)
-     * @throws IllegalStateException if either value is not configured
+     * @param orgId           the organization ID (DEVIN_ORG_ID), optional
+     * @throws IllegalStateException if the token is not configured
      */
     public OrgApiClient(
             @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgServiceToken,
@@ -50,18 +60,20 @@ public class OrgApiClient {
                     "DEVIN_ORG_SERVICE_TOKEN is not configured. "
                     + "Provision a Devin organization service user and set its token as DEVIN_ORG_SERVICE_TOKEN.");
         }
-        if (orgId == null || orgId.isBlank()) {
-            throw new IllegalStateException(
-                    "DEVIN_ORG_ID is not configured. "
-                    + "Set the organization ID as DEVIN_ORG_ID.");
-        }
         if (orgServiceToken.length() < 20) {
             log.warn("DEVIN_ORG_SERVICE_TOKEN appears too short ({} chars). "
                     + "Verify that the correct organization service user token is configured.",
                     orgServiceToken.length());
         }
 
-        this.orgId = orgId;
+        if (orgId != null && !orgId.isBlank()) {
+            this.orgId = Optional.of(orgId);
+            log.info("DEVIN_ORG_ID is configured: {}. Single-org mode enabled.", orgId);
+        } else {
+            this.orgId = Optional.empty();
+            log.info("DEVIN_ORG_ID is not configured. Multi-org auto-discovery mode enabled.");
+        }
+
         this.webClient = WebClient.builder()
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + orgServiceToken)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")

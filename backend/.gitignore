@@ -13,5 +13,8 @@ target/
 .DS_Store
 Thumbs.db
 
+# Environment variables (tokens, secrets)
+.env
+
 # Logs
 *.log
