@@ -9,12 +9,12 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 
 # Copy pom.xml first for dependency caching
-COPY pom.xml .
+COPY backend/pom.xml .
 RUN mvn dependency:go-offline -B
 
 # Copy source code and endpoints config
-COPY src ./src
-COPY ../endpoints.yaml ./endpoints.yaml
+COPY backend/src ./src
+COPY endpoints.yaml ./endpoints.yaml
 
 # Build the application (skip tests for faster image build; tests run in CI)
 RUN mvn clean package -DskipTests -B
