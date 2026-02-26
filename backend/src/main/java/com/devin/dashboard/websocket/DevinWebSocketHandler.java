@@ -25,8 +25,10 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -111,6 +113,14 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     /**
      * Polls all GET endpoints from the configuration and sends results to the WebSocket session.
+     *
+     * <p>For organization-scoped endpoints, the handler supports two modes:</p>
+     * <ul>
+     *   <li><b>Single-org mode</b>: if {@code DEVIN_ORG_ID} is configured, uses that ID directly.</li>
+     *   <li><b>Multi-org mode</b>: calls {@code list_organizations} via the enterprise API to
+     *       discover all org IDs, then iterates over each one. Results are sent with an
+     *       endpoint name that includes the org ID (e.g. {@code list_sessions__org_abc123}).</li>
+     * </ul>
      */
     private void pollEndpoints(WebSocketSession session) {
         if (!session.isOpen()) {
@@ -126,53 +136,179 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         }
 
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
+
+        // Resolve the list of org IDs to use for organization-scoped endpoints
+        List<String> orgIds = resolveOrgIds();
+
+        // Calculate total expected responses
+        int totalEndpoints = 0;
+        for (EndpointDefinition endpoint : readEndpoints) {
+            if ("organization".equalsIgnoreCase(endpoint.getScope())) {
+                totalEndpoints += orgIds.size();
+            } else {
+                totalEndpoints++;
+            }
+        }
+
         AtomicInteger completedCount = new AtomicInteger(0);
-        int totalEndpoints = readEndpoints.size();
+        int finalTotalEndpoints = totalEndpoints;
 
         for (EndpointDefinition endpoint : readEndpoints) {
             try {
-                // Route to the correct API client based on endpoint scope
                 String scope = endpoint.getScope();
-                Flux<String> responseFlux;
+
                 if ("organization".equalsIgnoreCase(scope)) {
-                    responseFlux = orgApiClient.get(endpoint,
-                            Map.of("org_id", orgApiClient.getOrgId()));
+                    if (orgIds.isEmpty()) {
+                        // No orgs available, skip organization endpoints
+                        continue;
+                    }
+                    // Iterate over each discovered org
+                    for (String currentOrgId : orgIds) {
+                        pollOrgEndpoint(session, endpoint, currentOrgId,
+                                completedCount, finalTotalEndpoints);
+                    }
                 } else {
-                    responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
-                }
+                    // Enterprise-scoped endpoint
+                    Flux<String> responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
 
-                Disposable subscription = responseFlux
-                        .collectList()
-                        .subscribe(
-                                dataChunks -> {
-                                    String rawData = String.join("", dataChunks);
-                                    String payload = buildPayload(endpoint.getName(), rawData);
-
-                                    // Cache the parsed response in memory
-                                    cacheEndpointData(endpoint.getName(), rawData);
-
-                                    sendMessage(session, payload);
-
-                                    // Write snapshot after all endpoints have responded
-                                    if (completedCount.incrementAndGet() >= totalEndpoints) {
-                                        writeSnapshotToDisk();
+                    Disposable subscription = responseFlux
+                            .collectList()
+                            .subscribe(
+                                    dataChunks -> {
+                                        String rawData = String.join("", dataChunks);
+                                        String payload = buildPayload(endpoint.getName(), rawData);
+                                        cacheEndpointData(endpoint.getName(), rawData);
+                                        sendMessage(session, payload);
+                                        if (completedCount.incrementAndGet() >= finalTotalEndpoints) {
+                                            writeSnapshotToDisk();
+                                        }
+                                    },
+                                    error -> {
+                                        log.warn("Poll error for endpoint {}: {}",
+                                                endpoint.getName(), error.getMessage());
+                                        completedCount.incrementAndGet();
                                     }
-                                },
-                                error -> {
-                                    log.warn("Poll error for endpoint {}: {}",
-                                            endpoint.getName(), error.getMessage());
-                                    completedCount.incrementAndGet();
-                                }
-                        );
+                            );
 
-                activeSubscriptions
-                        .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
-                        .add(subscription);
+                    activeSubscriptions
+                            .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
+                            .add(subscription);
+                }
 
             } catch (Exception e) {
                 log.error("Failed to poll endpoint {}: {}", endpoint.getName(), e.getMessage());
                 completedCount.incrementAndGet();
             }
+        }
+    }
+
+    /**
+     * Polls a single organization-scoped endpoint for a specific org ID.
+     * The WebSocket endpoint name is suffixed with {@code __org_{orgId}} when in
+     * multi-org mode, or kept as-is in single-org mode.
+     */
+    private void pollOrgEndpoint(WebSocketSession session, EndpointDefinition endpoint,
+                                 String currentOrgId, AtomicInteger completedCount, int totalEndpoints) {
+        Map<String, String> pathParams = new HashMap<>();
+        pathParams.put("org_id", currentOrgId);
+
+        Flux<String> responseFlux = orgApiClient.get(endpoint, pathParams);
+
+        // In multi-org mode, suffix the endpoint name with the org ID
+        boolean multiOrg = orgApiClient.getOrgId().isEmpty();
+        String endpointKey = multiOrg
+                ? endpoint.getName() + "__org_" + currentOrgId
+                : endpoint.getName();
+
+        Disposable subscription = responseFlux
+                .collectList()
+                .subscribe(
+                        dataChunks -> {
+                            String rawData = String.join("", dataChunks);
+                            String payload = buildPayload(endpointKey, rawData);
+                            cacheEndpointData(endpointKey, rawData);
+                            sendMessage(session, payload);
+                            if (completedCount.incrementAndGet() >= totalEndpoints) {
+                                writeSnapshotToDisk();
+                            }
+                        },
+                        error -> {
+                            log.warn("Poll error for endpoint {} (org {}): {}",
+                                    endpoint.getName(), currentOrgId, error.getMessage());
+                            completedCount.incrementAndGet();
+                        }
+                );
+
+        activeSubscriptions
+                .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
+                .add(subscription);
+    }
+
+    /**
+     * Resolves the list of organization IDs to poll.
+     *
+     * <p>If {@code DEVIN_ORG_ID} is configured, returns a singleton list with that value
+     * (single-org fallback). Otherwise, calls the enterprise {@code list_organizations}
+     * endpoint and parses the org IDs from the JSON response.</p>
+     *
+     * @return list of org IDs (may be empty if discovery fails)
+     */
+    private List<String> resolveOrgIds() {
+        Optional<String> configuredOrgId = orgApiClient.getOrgId();
+        if (configuredOrgId.isPresent()) {
+            return List.of(configuredOrgId.get());
+        }
+
+        // Multi-org: call list_organizations via enterprise API
+        Optional<EndpointDefinition> listOrgsEndpoint = endpointLoader.findByName("list_organizations");
+        if (listOrgsEndpoint.isEmpty()) {
+            log.warn("list_organizations endpoint not found in endpoints.yaml. "
+                    + "Cannot auto-discover organizations. Skipping organization-scoped endpoints.");
+            return Collections.emptyList();
+        }
+
+        try {
+            String responseBody = devinApiClient.get(listOrgsEndpoint.get(), Collections.emptyMap())
+                    .collectList()
+                    .map(chunks -> String.join("", chunks))
+                    .block(java.time.Duration.ofSeconds(15));
+
+            if (responseBody == null || responseBody.isBlank()) {
+                log.warn("list_organizations returned empty response. Skipping organization-scoped endpoints.");
+                return Collections.emptyList();
+            }
+
+            JsonNode root = objectMapper.readTree(responseBody);
+            List<String> orgIds = new ArrayList<>();
+
+            // Try common JSON structures: items[], organizations[], or root array
+            JsonNode itemsNode = root.has("items") ? root.get("items")
+                    : root.has("organizations") ? root.get("organizations")
+                    : root.isArray() ? root : null;
+
+            if (itemsNode != null && itemsNode.isArray()) {
+                for (JsonNode orgNode : itemsNode) {
+                    // Try "id" first, then "org_id"
+                    JsonNode idNode = orgNode.has("id") ? orgNode.get("id")
+                            : orgNode.has("org_id") ? orgNode.get("org_id") : null;
+                    if (idNode != null && !idNode.asText().isBlank()) {
+                        orgIds.add(idNode.asText());
+                    }
+                }
+            }
+
+            if (orgIds.isEmpty()) {
+                log.warn("list_organizations returned no org IDs. Response: {}",
+                        responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody);
+            } else {
+                log.info("Auto-discovered {} organization(s): {}", orgIds.size(), orgIds);
+            }
+
+            return orgIds;
+
+        } catch (Exception e) {
+            log.error("Failed to call list_organizations for multi-org discovery: {}", e.getMessage());
+            return Collections.emptyList();
         }
     }
 
