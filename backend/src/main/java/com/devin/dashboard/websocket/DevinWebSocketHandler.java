@@ -164,8 +164,8 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 String scope = endpoint.getScope();
 
                 if ("organization".equalsIgnoreCase(scope)) {
-                    if (orgIds.isEmpty()) {
-                        // No orgs available, skip organization endpoints
+                    if (!orgApiClient.isAvailable() || orgIds.isEmpty()) {
+                        // Org client not configured or no orgs discovered -- skip
                         continue;
                     }
                     // Iterate over each discovered org

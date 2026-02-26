@@ -17,6 +17,10 @@ import java.util.Optional;
  * <p>The organization ID ({@code DEVIN_ORG_ID}) is optional. When not configured,
  * the backend will auto-discover organizations via the enterprise {@code list_organizations}
  * endpoint and iterate over each one.</p>
+ *
+ * <p>The org service token ({@code DEVIN_ORG_SERVICE_TOKEN}) is also optional.
+ * When not configured, organization-scoped endpoints are skipped and only
+ * enterprise-scoped data is collected.</p>
  */
 @Slf4j
 @Service
@@ -31,17 +35,27 @@ public class OrgApiClient extends BaseApiClient {
     private final Optional<String> orgId;
 
     /**
+     * Whether the org service token was provided and this client can
+     * actually make API calls.  When the token is missing the client
+     * is still created (Spring needs the bean) but all HTTP calls
+     * should be skipped by the caller.
+     */
+    @Getter
+    private final boolean available;
+
+    /**
      * Constructs the organization API client, injecting the org service user token
      * and (optionally) the org ID from environment variables.
      *
      * @param orgServiceToken the organization service user token (DEVIN_ORG_SERVICE_TOKEN)
      * @param orgId           the organization ID (DEVIN_ORG_ID), optional
-     * @throws IllegalStateException if the token is not configured
      */
     public OrgApiClient(
             @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgServiceToken,
             @Value("${DEVIN_ORG_ID:}") String orgId) {
-        super(validateToken(orgServiceToken));
+        super(sanitizeToken(orgServiceToken));
+
+        this.available = orgServiceToken != null && !orgServiceToken.isBlank();
 
         if (orgId != null && !orgId.isBlank()) {
             this.orgId = Optional.of(orgId);
@@ -57,11 +71,12 @@ public class OrgApiClient extends BaseApiClient {
         return "Organization";
     }
 
-    private static String validateToken(String orgServiceToken) {
+    private static String sanitizeToken(String orgServiceToken) {
         if (orgServiceToken == null || orgServiceToken.isBlank()) {
-            throw new IllegalStateException(
-                    "DEVIN_ORG_SERVICE_TOKEN is not configured. "
-                    + "Provision a Devin organization service user and set its token as DEVIN_ORG_SERVICE_TOKEN.");
+            log.warn("DEVIN_ORG_SERVICE_TOKEN is not configured. "
+                    + "Organization-scoped endpoints will be skipped. "
+                    + "Set DEVIN_ORG_SERVICE_TOKEN to enable them.");
+            return "NOT_CONFIGURED";
         }
         if (orgServiceToken.length() < 20) {
             log.warn("DEVIN_ORG_SERVICE_TOKEN appears too short ({} chars). "

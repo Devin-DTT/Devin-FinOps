@@ -62,6 +62,13 @@ public class OrgDiscoveryService {
 
     @PostConstruct
     void start() {
+        if (!orgApiClient.isAvailable()) {
+            // No org token configured -- skip discovery entirely
+            this.initialized = true;
+            log.info("Org discovery disabled: DEVIN_ORG_SERVICE_TOKEN not configured.");
+            return;
+        }
+
         if (orgApiClient.getOrgId().isPresent()) {
             // Single-org: use configured value, mark as initialized
             this.cachedOrgIds = List.of(orgApiClient.getOrgId().get());
