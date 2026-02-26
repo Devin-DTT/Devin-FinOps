@@ -11,7 +11,9 @@ import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Abstract base class for Devin API clients.
@@ -56,7 +58,26 @@ public abstract class BaseApiClient {
      * @return a Flux emitting the response body (streamed)
      */
     public Flux<String> get(EndpointDefinition endpoint, Map<String, String> pathParams) {
+        return get(endpoint, pathParams, Collections.emptyMap());
+    }
+
+    /**
+     * Executes a GET request with both path parameters and query parameters.
+     *
+     * @param endpoint    the endpoint definition from endpoints.yaml
+     * @param pathParams  key-value map for URL path variable substitution
+     * @param queryParams key-value map for URL query parameter appending
+     * @return a Flux emitting the response body (streamed)
+     */
+    public Flux<String> get(EndpointDefinition endpoint, Map<String, String> pathParams,
+                            Map<String, String> queryParams) {
         String url = endpoint.buildUrl(pathParams);
+        if (queryParams != null && !queryParams.isEmpty()) {
+            String qs = queryParams.entrySet().stream()
+                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .collect(Collectors.joining("&"));
+            url += (url.contains("?") ? "&" : "?") + qs;
+        }
         log.debug("GET {} [endpoint={}, scope={}]", url, endpoint.getName(), getScopeLabel());
 
         return webClient.get()
