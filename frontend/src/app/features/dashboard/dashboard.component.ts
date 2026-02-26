@@ -493,27 +493,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   private handleSessionsMetrics(data: Record<string, unknown>): void {
-    this.state.sessionsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.state.sessionsMetrics = this.normalizeMetricTimeSeries(data, 'sessions');
     this.updateSessionsMetricsChart();
   }
 
   private handlePrsMetrics(data: Record<string, unknown>): void {
-    this.state.prsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.state.prsMetrics = this.normalizeMetricTimeSeries(data, 'prs');
     this.updatePrsChart();
   }
 
   private handleUsageMetrics(data: Record<string, unknown>): void {
-    this.state.usageMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.state.usageMetrics = this.normalizeMetricTimeSeries(data, 'usage');
     this.updateUsageChart();
   }
 
   private handleSearchesMetrics(data: Record<string, unknown>): void {
-    this.state.searchesMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.state.searchesMetrics = this.normalizeMetricTimeSeries(data, 'searches');
     this.updateSearchesChart();
   }
 
   private handleActiveUsersMetrics(data: Record<string, unknown>): void {
-    this.state.activeUsersMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.state.activeUsersMetrics = this.normalizeMetricTimeSeries(data, 'active_users');
   }
 
   private handleQueueStatus(data: Record<string, unknown>): void {
@@ -592,6 +592,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
       ?? (last['count'] as number)
       ?? (last['value'] as number)
       ?? 0;
+  }
+
+  /**
+   * Normalizes metrics time-series data from the Devin API.
+   * The API returns arrays like [{start_time: epoch, end_time: epoch, active_users: N}, ...]
+   * This converts them to MetricDataPoint[] with a date string and count.
+   */
+  private normalizeMetricTimeSeries(
+    data: Record<string, unknown>,
+    countField: string
+  ): MetricDataPoint[] {
+    let entries: Record<string, unknown>[];
+    if (Array.isArray(data)) {
+      entries = data as Record<string, unknown>[];
+    } else if (Array.isArray(data['items'])) {
+      entries = data['items'] as Record<string, unknown>[];
+    } else if (Array.isArray(data['data'])) {
+      entries = data['data'] as Record<string, unknown>[];
+    } else {
+      return this.extractArray<MetricDataPoint>(data, 'data');
+    }
+    return entries.map(e => {
+      const epochSec = (e['start_time'] as number) ?? 0;
+      const dateStr = epochSec > 0
+        ? new Date(epochSec * 1000).toISOString().split('T')[0]
+        : (e['date'] as string) ?? '';
+      const val = (e[countField] as number)
+        ?? (e['active_users'] as number)
+        ?? (e['count'] as number)
+        ?? (e['value'] as number)
+        ?? 0;
+      return { date: dateStr, count: val } as MetricDataPoint;
+    });
   }
 
   private applyFilter(): void {

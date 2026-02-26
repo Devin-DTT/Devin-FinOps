@@ -21,11 +21,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -87,6 +90,24 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     private final ScheduledExecutorService scheduler;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Metrics endpoints that require {@code time_before} and {@code time_after} query parameters.
+     * Without these, the Devin API returns HTTP 422 Unprocessable Entity.
+     */
+    private static final Set<String> METRICS_ENDPOINTS = Set.of(
+            "get_dau_metrics",
+            "get_wau_metrics",
+            "get_mau_metrics",
+            "get_active_users_metrics",
+            "get_sessions_metrics",
+            "get_searches_metrics",
+            "get_prs_metrics",
+            "get_usage_metrics"
+    );
+
+    /** Default lookback period for metrics queries (30 days). */
+    private static final int METRICS_LOOKBACK_DAYS = 30;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -183,7 +204,12 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                     }
                 } else {
                     // Enterprise-scoped endpoint
-                    Flux<String> responseFlux = devinApiClient.get(endpoint, Collections.emptyMap());
+                    Map<String, String> queryParams = Collections.emptyMap();
+                    if (METRICS_ENDPOINTS.contains(endpoint.getName())) {
+                        queryParams = buildMetricsTimeParams();
+                    }
+                    Flux<String> responseFlux = devinApiClient.get(
+                            endpoint, Collections.emptyMap(), queryParams);
 
                     Disposable subscription = responseFlux
                             .collectList()
@@ -260,6 +286,21 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         activeSubscriptions
                 .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
                 .add(subscription);
+    }
+
+    /**
+     * Builds query parameters with {@code time_before} (now) and {@code time_after}
+     * (now minus {@link #METRICS_LOOKBACK_DAYS}) for metrics endpoints.
+     *
+     * @return map with time_before and time_after as epoch seconds
+     */
+    private Map<String, String> buildMetricsTimeParams() {
+        Instant now = Instant.now();
+        Instant lookback = now.minus(METRICS_LOOKBACK_DAYS, ChronoUnit.DAYS);
+        Map<String, String> params = new HashMap<>();
+        params.put("time_before", String.valueOf(now.getEpochSecond()));
+        params.put("time_after", String.valueOf(lookback.getEpochSecond()));
+        return params;
     }
 
     /**
