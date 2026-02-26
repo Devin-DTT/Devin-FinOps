@@ -13,9 +13,10 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatTabsModule } from '@angular/material/tabs';
 
 import { BaseChartDirective } from 'ng2-charts';
-import { ChartConfiguration, ChartData } from 'chart.js';
+import { ChartConfiguration, ChartData, ChartOptions } from 'chart.js';
 
 import { WebSocketService, ConnectionStatus } from '../../core/services/websocket.service';
 import {
@@ -45,6 +46,7 @@ import {
     MatSortModule,
     MatProgressBarModule,
     MatTooltipModule,
+    MatTabsModule,
     BaseChartDirective
   ],
   templateUrl: './dashboard.component.html',
@@ -75,6 +77,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     sessionsMetrics: [],
     prsMetrics: [],
     usageMetrics: [],
+    searchesMetrics: [],
+    activeUsersMetrics: [],
     queueStatus: 'unknown',
     hypervisorCount: 0,
     orgCount: 0,
@@ -109,6 +113,145 @@ export class DashboardComponent implements OnInit, OnDestroy {
     scales: {
       x: { title: { display: true, text: 'Time' } },
       y: { title: { display: true, text: 'Running Sessions' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  // Chart: Session status distribution (doughnut)
+  sessionDonutData: ChartData<'doughnut'> = {
+    labels: ['Running', 'Finished', 'Failed', 'Stopped'],
+    datasets: [
+      {
+        data: [0, 0, 0, 0],
+        backgroundColor: ['#3f51b5', '#4caf50', '#f44336', '#9e9e9e'],
+        hoverBackgroundColor: ['#5c6bc0', '#66bb6a', '#ef5350', '#bdbdbd']
+      }
+    ]
+  };
+
+  sessionDonutOptions: ChartConfiguration<'doughnut'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: true, position: 'right' } }
+  };
+
+  // Chart: Sessions metrics per day (bar)
+  sessionsMetricsChartData: ChartData<'bar'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'Sessions',
+        backgroundColor: '#3f51b5',
+        borderColor: '#3f51b5',
+        borderWidth: 1
+      }
+    ]
+  };
+
+  sessionsMetricsChartOptions: ChartConfiguration<'bar'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Date' } },
+      y: { title: { display: true, text: 'Sessions' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  // Chart: Billing cycles history (bar)
+  billingCyclesChartData: ChartData<'bar'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'ACU Usage per Cycle',
+        backgroundColor: '#ff9800',
+        borderColor: '#ff9800',
+        borderWidth: 1
+      }
+    ]
+  };
+
+  billingCyclesChartOptions: ChartConfiguration<'bar'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Billing Cycle' } },
+      y: { title: { display: true, text: 'ACU Usage' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  // Chart: PRs per day (bar)
+  prsChartData: ChartData<'bar'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'Pull Requests',
+        backgroundColor: '#9c27b0',
+        borderColor: '#9c27b0',
+        borderWidth: 1
+      }
+    ]
+  };
+
+  prsChartOptions: ChartConfiguration<'bar'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Date' } },
+      y: { title: { display: true, text: 'PRs' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  // Chart: Usage metrics over time (line)
+  usageChartData: ChartData<'line'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'Usage',
+        fill: true,
+        tension: 0.4,
+        borderColor: '#00bcd4',
+        backgroundColor: 'rgba(0, 188, 212, 0.1)'
+      }
+    ]
+  };
+
+  usageChartOptions: ChartConfiguration<'line'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Date' } },
+      y: { title: { display: true, text: 'Usage' }, beginAtZero: true }
+    },
+    plugins: { legend: { display: true, position: 'top' } }
+  };
+
+  // Chart: Searches per day (bar)
+  searchesChartData: ChartData<'bar'> = {
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        label: 'Searches',
+        backgroundColor: '#009688',
+        borderColor: '#009688',
+        borderWidth: 1
+      }
+    ]
+  };
+
+  searchesChartOptions: ChartConfiguration<'bar'>['options'] = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { title: { display: true, text: 'Date' } },
+      y: { title: { display: true, text: 'Searches' }, beginAtZero: true }
     },
     plugins: { legend: { display: true, position: 'top' } }
   };
@@ -249,6 +392,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'list_users':
         this.handleUsers(data);
         break;
+      case 'get_searches_metrics':
+        this.handleSearchesMetrics(data);
+        break;
+      case 'get_active_users_metrics':
+        this.handleActiveUsersMetrics(data);
+        break;
       default:
         // Other endpoints - log for debugging
         break;
@@ -275,6 +424,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     this.applyFilter();
     this.updateSessionChart();
+    this.updateSessionDonut();
   }
 
   private handleBillingCycles(data: Record<string, unknown>): void {
@@ -288,6 +438,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         ? Math.round((this.state.currentCycleAcu / this.state.currentCycleLimit) * 100)
         : 0;
     }
+    this.updateBillingCyclesChart();
   }
 
   private handleDailyConsumption(data: Record<string, unknown>): void {
@@ -320,14 +471,26 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private handleSessionsMetrics(data: Record<string, unknown>): void {
     this.state.sessionsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.updateSessionsMetricsChart();
   }
 
   private handlePrsMetrics(data: Record<string, unknown>): void {
     this.state.prsMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.updatePrsChart();
   }
 
   private handleUsageMetrics(data: Record<string, unknown>): void {
     this.state.usageMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.updateUsageChart();
+  }
+
+  private handleSearchesMetrics(data: Record<string, unknown>): void {
+    this.state.searchesMetrics = this.extractArray<MetricDataPoint>(data, 'data');
+    this.updateSearchesChart();
+  }
+
+  private handleActiveUsersMetrics(data: Record<string, unknown>): void {
+    this.state.activeUsersMetrics = this.extractArray<MetricDataPoint>(data, 'data');
   }
 
   private handleQueueStatus(data: Record<string, unknown>): void {
@@ -422,6 +585,93 @@ export class DashboardComponent implements OnInit, OnDestroy {
         {
           ...this.acuChartData.datasets[0],
           data: sorted.map(e => e.acu_consumed)
+        }
+      ]
+    };
+  }
+
+  private updateSessionDonut(): void {
+    this.sessionDonutData = {
+      ...this.sessionDonutData,
+      datasets: [
+        {
+          ...this.sessionDonutData.datasets[0],
+          data: [
+            this.state.runningSessions,
+            this.state.finishedSessions,
+            this.state.failedSessions,
+            this.state.stoppedSessions
+          ]
+        }
+      ]
+    };
+  }
+
+  private updateSessionsMetricsChart(): void {
+    const metrics = this.state.sessionsMetrics;
+    this.sessionsMetricsChartData = {
+      ...this.sessionsMetricsChartData,
+      labels: metrics.map(m => m.date ?? ''),
+      datasets: [
+        {
+          ...this.sessionsMetricsChartData.datasets[0],
+          data: metrics.map(m => (m.count ?? m.value) ?? 0)
+        }
+      ]
+    };
+  }
+
+  private updateBillingCyclesChart(): void {
+    const cycles = this.state.billingCycles;
+    this.billingCyclesChartData = {
+      ...this.billingCyclesChartData,
+      labels: cycles.map(c => c.start_date),
+      datasets: [
+        {
+          ...this.billingCyclesChartData.datasets[0],
+          data: cycles.map(c => c.acu_usage ?? 0)
+        }
+      ]
+    };
+  }
+
+  private updatePrsChart(): void {
+    const metrics = this.state.prsMetrics;
+    this.prsChartData = {
+      ...this.prsChartData,
+      labels: metrics.map(m => m.date ?? ''),
+      datasets: [
+        {
+          ...this.prsChartData.datasets[0],
+          data: metrics.map(m => (m.count ?? m.value) ?? 0)
+        }
+      ]
+    };
+  }
+
+  private updateUsageChart(): void {
+    const metrics = this.state.usageMetrics;
+    this.usageChartData = {
+      ...this.usageChartData,
+      labels: metrics.map(m => m.date ?? ''),
+      datasets: [
+        {
+          ...this.usageChartData.datasets[0],
+          data: metrics.map(m => (m.count ?? m.value) ?? 0)
+        }
+      ]
+    };
+  }
+
+  private updateSearchesChart(): void {
+    const metrics = this.state.searchesMetrics;
+    this.searchesChartData = {
+      ...this.searchesChartData,
+      labels: metrics.map(m => m.date ?? ''),
+      datasets: [
+        {
+          ...this.searchesChartData.datasets[0],
+          data: metrics.map(m => (m.count ?? m.value) ?? 0)
         }
       ]
     };

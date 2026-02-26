@@ -113,6 +113,8 @@ export interface DashboardState {
   sessionsMetrics: MetricDataPoint[];
   prsMetrics: MetricDataPoint[];
   usageMetrics: MetricDataPoint[];
+  searchesMetrics: MetricDataPoint[];
+  activeUsersMetrics: MetricDataPoint[];
 
   // Infrastructure
   queueStatus: string;
