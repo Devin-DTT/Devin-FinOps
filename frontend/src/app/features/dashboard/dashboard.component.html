@@ -15,222 +15,492 @@
 
 <div class="dashboard-container">
 
-  <!-- Session KPI Cards -->
-  <div class="kpi-section">
-    <mat-card class="kpi-card">
-      <mat-card-header>
-        <mat-card-title>Total Sessions</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.totalSessions }}</span>
-      </mat-card-content>
-    </mat-card>
+  <mat-tab-group animationDuration="300ms" class="dashboard-tabs">
 
-    <mat-card class="kpi-card kpi-running">
-      <mat-card-header>
-        <mat-card-title>Running</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.runningSessions }}</span>
-      </mat-card-content>
-    </mat-card>
+    <!-- ==================== Tab 1: Overview ==================== -->
+    <mat-tab label="Overview">
+      <div class="tab-content">
 
-    <mat-card class="kpi-card kpi-finished">
-      <mat-card-header>
-        <mat-card-title>Finished</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.finishedSessions }}</span>
-      </mat-card-content>
-    </mat-card>
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Total Sessions</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.totalSessions }}</span>
+            </mat-card-content>
+          </mat-card>
 
-    <mat-card class="kpi-card kpi-failed">
-      <mat-card-header>
-        <mat-card-title>Failed</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.failedSessions }}</span>
-      </mat-card-content>
-    </mat-card>
+          <mat-card class="kpi-card kpi-running">
+            <mat-card-header>
+              <mat-card-title>Running</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.runningSessions }}</span>
+            </mat-card-content>
+          </mat-card>
 
-    <mat-card class="kpi-card kpi-stopped">
-      <mat-card-header>
-        <mat-card-title>Stopped</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.stoppedSessions }}</span>
-      </mat-card-content>
-    </mat-card>
-  </div>
+          <mat-card class="kpi-card kpi-failed">
+            <mat-card-header>
+              <mat-card-title>Failed</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.failedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
 
-  <!-- ACU / Billing Section -->
-  <div class="kpi-section" *ngIf="state.currentCycleLimit > 0 || state.currentCycleAcu > 0">
-    <mat-card class="kpi-card kpi-acu">
-      <mat-card-header>
-        <mat-card-title>ACU Usage</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <span class="kpi-value">{{ state.currentCycleAcu | number:'1.1-1' }}</span>
-        <span class="kpi-sub" *ngIf="state.currentCycleLimit > 0">/ {{ state.currentCycleLimit | number:'1.0-0' }} limit</span>
-        <mat-progress-bar mode="determinate" [value]="acuUsagePercent" class="acu-bar"></mat-progress-bar>
-        <span class="kpi-sub">{{ acuUsagePercent }}% used</span>
-      </mat-card-content>
-    </mat-card>
+          <mat-card class="kpi-card kpi-acu">
+            <mat-card-header>
+              <mat-card-title>ACU % Used</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ acuUsagePercent }}%</span>
+            </mat-card-content>
+          </mat-card>
 
-    <mat-card class="kpi-card" *ngIf="state.dauCount > 0 || state.wauCount > 0 || state.mauCount > 0">
-      <mat-card-header>
-        <mat-card-title>User Activity</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="metric-row">
-          <span class="metric-label">DAU</span>
-          <span class="metric-value">{{ state.dauCount }}</span>
+          <mat-card class="kpi-card" *ngIf="state.queueStatus !== 'unknown'">
+            <mat-card-header>
+              <mat-card-title>Queue Status</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <mat-chip-set>
+                <mat-chip [color]="getQueueStatusColor()" highlighted>
+                  {{ state.queueStatus | titlecase }}
+                </mat-chip>
+              </mat-chip-set>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>DAU</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.dauCount }}</span>
+            </mat-card-content>
+          </mat-card>
         </div>
-        <div class="metric-row">
-          <span class="metric-label">WAU</span>
-          <span class="metric-value">{{ state.wauCount }}</span>
+
+        <!-- Running Sessions Over Time Chart -->
+        <div class="charts-row">
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Running Sessions Over Time</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="lineChartData"
+                        [options]="lineChartOptions"
+                        type="line">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
         </div>
-        <div class="metric-row">
-          <span class="metric-label">MAU</span>
-          <span class="metric-value">{{ state.mauCount }}</span>
+
+      </div>
+    </mat-tab>
+
+    <!-- ==================== Tab 2: Billing & Consumo ==================== -->
+    <mat-tab label="Billing & Consumo">
+      <div class="tab-content">
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          <mat-card class="kpi-card kpi-acu">
+            <mat-card-header>
+              <mat-card-title>ACU Used</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.currentCycleAcu | number:'1.1-1' }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>ACU Limit</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.currentCycleLimit | number:'1.0-0' }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-acu wide-card">
+            <mat-card-header>
+              <mat-card-title>ACU Usage Progress</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <mat-progress-bar mode="determinate" [value]="acuUsagePercent" class="acu-bar"></mat-progress-bar>
+              <span class="kpi-sub">{{ acuUsagePercent }}% used ({{ state.currentCycleAcu | number:'1.1-1' }} / {{ state.currentCycleLimit | number:'1.0-0' }})</span>
+            </mat-card-content>
+          </mat-card>
         </div>
-      </mat-card-content>
-    </mat-card>
 
-    <mat-card class="kpi-card" *ngIf="state.queueStatus !== 'unknown'">
-      <mat-card-header>
-        <mat-card-title>Queue Status</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <mat-chip-set>
-          <mat-chip [color]="getQueueStatusColor()" highlighted>
-            {{ state.queueStatus | titlecase }}
-          </mat-chip>
-        </mat-chip-set>
-      </mat-card-content>
-    </mat-card>
+        <!-- Charts -->
+        <div class="charts-row">
+          <!-- Daily ACU Consumption -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Daily ACU Consumption</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="acuChartData"
+                        [options]="acuChartOptions"
+                        type="line">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
 
-    <mat-card class="kpi-card" *ngIf="state.orgCount > 0 || state.userCount > 0 || state.hypervisorCount > 0">
-      <mat-card-header>
-        <mat-card-title>Infrastructure</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="metric-row" *ngIf="state.orgCount > 0">
-          <span class="metric-label">Organizations</span>
-          <span class="metric-value">{{ state.orgCount }}</span>
+          <!-- Billing Cycles History -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Billing Cycles - ACU Usage</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="billingCyclesChartData"
+                        [options]="billingCyclesChartOptions"
+                        type="bar">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
         </div>
-        <div class="metric-row" *ngIf="state.userCount > 0">
-          <span class="metric-label">Users</span>
-          <span class="metric-value">{{ state.userCount }}</span>
+
+      </div>
+    </mat-tab>
+
+    <!-- ==================== Tab 3: Users & Actividad ==================== -->
+    <mat-tab label="Users & Actividad">
+      <div class="tab-content">
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>DAU</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.dauCount }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>WAU</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.wauCount }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>MAU</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.mauCount }}</span>
+            </mat-card-content>
+          </mat-card>
         </div>
-        <div class="metric-row" *ngIf="state.hypervisorCount > 0">
-          <span class="metric-label">Hypervisors</span>
-          <span class="metric-value">{{ state.hypervisorCount }}</span>
+
+        <!-- Searches Chart -->
+        <div class="charts-row">
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Searches per Day</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="searchesChartData"
+                        [options]="searchesChartOptions"
+                        type="bar">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
         </div>
-      </mat-card-content>
-    </mat-card>
-  </div>
 
-  <!-- Charts Row -->
-  <div class="charts-row">
-    <!-- Running Sessions Over Time -->
-    <mat-card class="chart-card">
-      <mat-card-header>
-        <mat-card-title>Running Sessions Over Time</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="chart-container">
-          <canvas baseChart
-                  [data]="lineChartData"
-                  [options]="lineChartOptions"
-                  type="line">
-          </canvas>
+        <!-- Active Users Section -->
+        <mat-card class="table-card" *ngIf="state.activeUsersMetrics.length > 0">
+          <mat-card-header>
+            <mat-card-title>Active Users Metrics</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="active-users-grid">
+              @for (metric of state.activeUsersMetrics; track metric.date) {
+                <mat-card class="kpi-card mini-card">
+                  <mat-card-header>
+                    <mat-card-title>{{ metric.date ?? 'N/A' }}</mat-card-title>
+                  </mat-card-header>
+                  <mat-card-content>
+                    <span class="kpi-value small-value">{{ (metric.count ?? metric.value) ?? 0 }}</span>
+                    <span class="kpi-sub">active users</span>
+                  </mat-card-content>
+                </mat-card>
+              }
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+      </div>
+    </mat-tab>
+
+    <!-- ==================== Tab 4: Sessions ==================== -->
+    <mat-tab label="Sessions">
+      <div class="tab-content">
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Total</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.totalSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-running">
+            <mat-card-header>
+              <mat-card-title>Running</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.runningSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-finished">
+            <mat-card-header>
+              <mat-card-title>Finished</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.finishedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-failed">
+            <mat-card-header>
+              <mat-card-title>Failed</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.failedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-stopped">
+            <mat-card-header>
+              <mat-card-title>Stopped</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.stoppedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
         </div>
-      </mat-card-content>
-    </mat-card>
 
-    <!-- ACU Consumption Chart -->
-    <mat-card class="chart-card" *ngIf="state.dailyConsumption.length > 0">
-      <mat-card-header>
-        <mat-card-title>Daily ACU Consumption</mat-card-title>
-      </mat-card-header>
-      <mat-card-content>
-        <div class="chart-container">
-          <canvas baseChart
-                  [data]="acuChartData"
-                  [options]="acuChartOptions"
-                  type="line">
-          </canvas>
+        <!-- Charts -->
+        <div class="charts-row">
+          <!-- Session Donut -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Session Distribution</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="sessionDonutData"
+                        [options]="sessionDonutOptions"
+                        type="doughnut">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <!-- Sessions per Day -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Sessions per Day</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="sessionsMetricsChartData"
+                        [options]="sessionsMetricsChartOptions"
+                        type="bar">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
         </div>
-      </mat-card-content>
-    </mat-card>
-  </div>
 
-  <!-- Filter and Sessions Table -->
-  <mat-card class="table-card">
-    <mat-card-header>
-      <mat-card-title>Sessions</mat-card-title>
-      <span class="spacer"></span>
-      <mat-form-field appearance="outline" class="status-filter">
-        <mat-label>Filter by Status</mat-label>
-        <mat-select [(value)]="selectedStatusFilter" (selectionChange)="onStatusFilterChange()">
-          @for (status of statusOptions; track status) {
-            <mat-option [value]="status">{{ status | titlecase }}</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
-    </mat-card-header>
-    <mat-card-content>
-      <table mat-table [dataSource]="dataSource" matSort class="sessions-table">
+        <!-- Sessions Table with Filter -->
+        <mat-card class="table-card">
+          <mat-card-header>
+            <mat-card-title>Sessions</mat-card-title>
+            <span class="spacer"></span>
+            <mat-form-field appearance="outline" class="status-filter">
+              <mat-label>Filter by Status</mat-label>
+              <mat-select [(value)]="selectedStatusFilter" (selectionChange)="onStatusFilterChange()">
+                @for (status of statusOptions; track status) {
+                  <mat-option [value]="status">{{ status | titlecase }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </mat-card-header>
+          <mat-card-content>
+            <table mat-table [dataSource]="dataSource" matSort class="sessions-table">
 
-        <!-- Session ID Column -->
-        <ng-container matColumnDef="session_id">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Session ID</th>
-          <td mat-cell *matCellDef="let session" class="id-cell">{{ session.session_id }}</td>
-        </ng-container>
+              <!-- Session ID Column -->
+              <ng-container matColumnDef="session_id">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Session ID</th>
+                <td mat-cell *matCellDef="let session" class="id-cell">{{ session.session_id }}</td>
+              </ng-container>
 
-        <!-- Title Column -->
-        <ng-container matColumnDef="title">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Title</th>
-          <td mat-cell *matCellDef="let session">{{ session.title || '-' }}</td>
-        </ng-container>
+              <!-- Title Column -->
+              <ng-container matColumnDef="title">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Title</th>
+                <td mat-cell *matCellDef="let session">{{ session.title || '-' }}</td>
+              </ng-container>
 
-        <!-- Status Column -->
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
-          <td mat-cell *matCellDef="let session">
-            <mat-chip-set>
-              <mat-chip [color]="getStatusColor(session.status)" highlighted>
-                {{ session.status | titlecase }}
-              </mat-chip>
-            </mat-chip-set>
-          </td>
-        </ng-container>
+              <!-- Status Column -->
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+                <td mat-cell *matCellDef="let session">
+                  <mat-chip-set>
+                    <mat-chip [color]="getStatusColor(session.status)" highlighted>
+                      {{ session.status | titlecase }}
+                    </mat-chip>
+                  </mat-chip-set>
+                </td>
+              </ng-container>
 
-        <!-- Origin Column -->
-        <ng-container matColumnDef="origin">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Origin</th>
-          <td mat-cell *matCellDef="let session">{{ session.origin || '-' }}</td>
-        </ng-container>
+              <!-- Origin Column -->
+              <ng-container matColumnDef="origin">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Origin</th>
+                <td mat-cell *matCellDef="let session">{{ session.origin || '-' }}</td>
+              </ng-container>
 
-        <!-- Created At Column -->
-        <ng-container matColumnDef="created_at">
-          <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
-          <td mat-cell *matCellDef="let session">{{ formatTimestamp(session.created_at) }}</td>
-        </ng-container>
+              <!-- Created At Column -->
+              <ng-container matColumnDef="created_at">
+                <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
+                <td mat-cell *matCellDef="let session">{{ formatTimestamp(session.created_at) }}</td>
+              </ng-container>
 
-        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
 
-        <!-- No data row -->
-        <tr class="mat-row no-data-row" *matNoDataRow>
-          <td class="mat-cell" [attr.colspan]="displayedColumns.length">
-            {{ connectionStatus === 'connected' ? 'Waiting for session data...' : 'No sessions available' }}
-          </td>
-        </tr>
-      </table>
-    </mat-card-content>
-  </mat-card>
+              <!-- No data row -->
+              <tr class="mat-row no-data-row" *matNoDataRow>
+                <td class="mat-cell" [attr.colspan]="displayedColumns.length">
+                  {{ connectionStatus === 'connected' ? 'Waiting for session data...' : 'No sessions available' }}
+                </td>
+              </tr>
+            </table>
+          </mat-card-content>
+        </mat-card>
+
+      </div>
+    </mat-tab>
+
+    <!-- ==================== Tab 5: DevOps ==================== -->
+    <mat-tab label="DevOps">
+      <div class="tab-content">
+
+        <div class="charts-row">
+          <!-- PRs per Day -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Pull Requests per Day</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="prsChartData"
+                        [options]="prsChartOptions"
+                        type="bar">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
+
+          <!-- Usage Metrics -->
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>Usage Metrics Over Time</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="usageChartData"
+                        [options]="usageChartOptions"
+                        type="line">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+      </div>
+    </mat-tab>
+
+    <!-- ==================== Tab 6: Infraestructura ==================== -->
+    <mat-tab label="Infraestructura">
+      <div class="tab-content">
+
+        <!-- KPI Cards -->
+        <div class="kpi-section">
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Organizations</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.orgCount }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Users</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.userCount }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Hypervisors</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.hypervisorCount }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card" *ngIf="state.queueStatus !== 'unknown'">
+            <mat-card-header>
+              <mat-card-title>Queue Status</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <mat-chip-set>
+                <mat-chip [color]="getQueueStatusColor()" highlighted>
+                  {{ state.queueStatus | titlecase }}
+                </mat-chip>
+              </mat-chip-set>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+      </div>
+    </mat-tab>
+
+  </mat-tab-group>
 
   <!-- Last Updated -->
   <div class="last-updated" *ngIf="state.lastUpdated > 0">

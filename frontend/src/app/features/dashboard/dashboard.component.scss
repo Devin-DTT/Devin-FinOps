@@ -167,6 +167,32 @@
   }
 }
 
+// Tab styles
+.dashboard-tabs {
+  margin-top: 8px;
+}
+
+.tab-content {
+  padding: 24px 0;
+}
+
+.wide-card {
+  grid-column: span 2;
+}
+
+.mini-card {
+  .kpi-value.small-value {
+    font-size: 28px;
+  }
+}
+
+.active-users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 8px 0;
+}
+
 .last-updated {
   text-align: center;
   font-size: 12px;
