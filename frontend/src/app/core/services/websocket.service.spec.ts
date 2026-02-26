@@ -1,4 +1,4 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed } from '@angular/core/testing';
 import { WebSocketService, ConnectionStatus } from './websocket.service';
 import { Subject } from 'rxjs';
 import { WebSocketMessage } from '../../models/devin-data.model';
