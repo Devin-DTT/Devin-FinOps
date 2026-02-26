@@ -60,6 +60,16 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         this.devinApiClient = devinApiClient;
         this.orgApiClient = orgApiClient;
         this.endpointLoader = endpointLoader;
+
+        // If multi-org mode, start async org discovery that refreshes every 60 seconds
+        if (orgApiClient.getOrgId().isEmpty()) {
+            orgDiscoveryExecutor.scheduleAtFixedRate(
+                    this::refreshOrgIds, 0, 60, TimeUnit.SECONDS);
+        } else {
+            // Single-org: use configured value, mark as initialized
+            this.cachedOrgIds = List.of(orgApiClient.getOrgId().get());
+            this.orgDiscoveryInitialized = true;
+        }
     }
 
     /** Tracks active polling tasks per session so they can be cancelled on disconnect. */
@@ -70,10 +80,19 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
 
+    /** Single-thread executor for asynchronous org discovery (avoids blocking scheduler threads). */
+    private final ScheduledExecutorService orgDiscoveryExecutor = Executors.newSingleThreadScheduledExecutor();
+
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /** In-memory cache of the latest API response per endpoint (key = endpoint name). */
     private final Map<String, JsonNode> latestSnapshot = new ConcurrentHashMap<>();
+
+    /** Cached list of discovered organization IDs (refreshed every 60 seconds). */
+    private volatile List<String> cachedOrgIds = Collections.emptyList();
+
+    /** Whether the initial org discovery has completed at least once. */
+    private volatile boolean orgDiscoveryInitialized = false;
 
     private static final Path SNAPSHOT_DIR = Paths.get("data");
     private static final Path SNAPSHOT_FILE = SNAPSHOT_DIR.resolve("latest-snapshot.json");
@@ -117,9 +136,9 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
      * <p>For organization-scoped endpoints, the handler supports two modes:</p>
      * <ul>
      *   <li><b>Single-org mode</b>: if {@code DEVIN_ORG_ID} is configured, uses that ID directly.</li>
-     *   <li><b>Multi-org mode</b>: calls {@code list_organizations} via the enterprise API to
-     *       discover all org IDs, then iterates over each one. Results are sent with an
-     *       endpoint name that includes the org ID (e.g. {@code list_sessions__org_abc123}).</li>
+     *   <li><b>Multi-org mode</b>: uses cached org IDs (refreshed asynchronously every 60s via
+     *       {@code list_organizations}) and iterates over each one. The {@code org_id} is included
+     *       as a separate field in the JSON payload to maintain frontend compatibility.</li>
      * </ul>
      */
     private void pollEndpoints(WebSocketSession session) {
@@ -137,8 +156,8 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
 
-        // Resolve the list of org IDs to use for organization-scoped endpoints
-        List<String> orgIds = resolveOrgIds();
+        // Use cached org IDs (refreshed asynchronously every 60s)
+        List<String> orgIds = cachedOrgIds;
 
         // Calculate total expected responses
         int totalEndpoints = 0;
@@ -204,8 +223,10 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     /**
      * Polls a single organization-scoped endpoint for a specific org ID.
-     * The WebSocket endpoint name is suffixed with {@code __org_{orgId}} when in
-     * multi-org mode, or kept as-is in single-org mode.
+     *
+     * <p>The WebSocket message uses the original endpoint name (e.g. {@code list_sessions})
+     * for frontend compatibility, with {@code org_id} included as a separate field in the
+     * JSON payload. The cache key includes the org ID suffix for snapshot differentiation.</p>
      */
     private void pollOrgEndpoint(WebSocketSession session, EndpointDefinition endpoint,
                                  String currentOrgId, AtomicInteger completedCount, int totalEndpoints) {
@@ -214,9 +235,9 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
         Flux<String> responseFlux = orgApiClient.get(endpoint, pathParams);
 
-        // In multi-org mode, suffix the endpoint name with the org ID
+        // Cache key includes org ID for snapshot differentiation in multi-org mode
         boolean multiOrg = orgApiClient.getOrgId().isEmpty();
-        String endpointKey = multiOrg
+        String cacheKey = multiOrg
                 ? endpoint.getName() + "__org_" + currentOrgId
                 : endpoint.getName();
 
@@ -225,8 +246,10 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 .subscribe(
                         dataChunks -> {
                             String rawData = String.join("", dataChunks);
-                            String payload = buildPayload(endpointKey, rawData);
-                            cacheEndpointData(endpointKey, rawData);
+                            // Use original endpoint name for frontend switch compatibility;
+                            // include org_id as separate field in the JSON payload
+                            String payload = buildPayload(endpoint.getName(), rawData, currentOrgId);
+                            cacheEndpointData(cacheKey, rawData);
                             sendMessage(session, payload);
                             if (completedCount.incrementAndGet() >= totalEndpoints) {
                                 writeSnapshotToDisk();
@@ -245,37 +268,29 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Resolves the list of organization IDs to poll.
-     *
-     * <p>If {@code DEVIN_ORG_ID} is configured, returns a singleton list with that value
-     * (single-org fallback). Otherwise, calls the enterprise {@code list_organizations}
-     * endpoint and parses the org IDs from the JSON response.</p>
-     *
-     * @return list of org IDs (may be empty if discovery fails)
+     * Asynchronously refreshes the cached list of organization IDs.
+     * Runs on a dedicated single-thread executor every 60 seconds to avoid
+     * blocking the WebSocket polling scheduler threads.
      */
-    private List<String> resolveOrgIds() {
-        Optional<String> configuredOrgId = orgApiClient.getOrgId();
-        if (configuredOrgId.isPresent()) {
-            return List.of(configuredOrgId.get());
-        }
-
-        // Multi-org: call list_organizations via enterprise API
+    private void refreshOrgIds() {
         Optional<EndpointDefinition> listOrgsEndpoint = endpointLoader.findByName("list_organizations");
         if (listOrgsEndpoint.isEmpty()) {
             log.warn("list_organizations endpoint not found in endpoints.yaml. "
                     + "Cannot auto-discover organizations. Skipping organization-scoped endpoints.");
-            return Collections.emptyList();
+            orgDiscoveryInitialized = true;
+            return;
         }
 
         try {
             String responseBody = devinApiClient.get(listOrgsEndpoint.get(), Collections.emptyMap())
                     .collectList()
                     .map(chunks -> String.join("", chunks))
-                    .block(java.time.Duration.ofSeconds(15));
+                    .block(java.time.Duration.ofSeconds(10));
 
             if (responseBody == null || responseBody.isBlank()) {
-                log.warn("list_organizations returned empty response. Skipping organization-scoped endpoints.");
-                return Collections.emptyList();
+                log.warn("list_organizations returned empty response. Keeping previous cached org IDs.");
+                orgDiscoveryInitialized = true;
+                return;
             }
 
             JsonNode root = objectMapper.readTree(responseBody);
@@ -302,13 +317,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                         responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody);
             } else {
                 log.info("Auto-discovered {} organization(s): {}", orgIds.size(), orgIds);
+                this.cachedOrgIds = List.copyOf(orgIds);
             }
-
-            return orgIds;
 
         } catch (Exception e) {
             log.error("Failed to call list_organizations for multi-org discovery: {}", e.getMessage());
-            return Collections.emptyList();
+        } finally {
+            orgDiscoveryInitialized = true;
         }
     }
 
@@ -316,11 +331,29 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
      * Builds a JSON payload wrapping the endpoint data using Jackson for proper serialization.
      */
     private String buildPayload(String endpointName, String data) {
+        return buildPayload(endpointName, data, null);
+    }
+
+    /**
+     * Builds a JSON payload wrapping the endpoint data, optionally including an org_id field.
+     *
+     * <p>The {@code endpoint} field always uses the original endpoint name (e.g. {@code list_sessions})
+     * so the frontend switch statement can match it. The optional {@code org_id} field allows the
+     * frontend to differentiate data from different organizations in multi-org mode.</p>
+     *
+     * @param endpointName the original endpoint name (unchanged for frontend compatibility)
+     * @param data         the raw JSON response body
+     * @param orgId        the organization ID (null for enterprise-scoped endpoints)
+     */
+    private String buildPayload(String endpointName, String data, String orgId) {
         try {
             ObjectNode node = objectMapper.createObjectNode();
             node.put("type", "data");
             node.put("endpoint", endpointName);
             node.put("timestamp", System.currentTimeMillis());
+            if (orgId != null && !orgId.isBlank()) {
+                node.put("org_id", orgId);
+            }
             if (data.isEmpty()) {
                 node.putNull("data");
             } else {
