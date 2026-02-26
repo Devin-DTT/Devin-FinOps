@@ -16,8 +16,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -39,24 +39,27 @@ class OrgApiClientTest {
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when DEVIN_ORG_SERVICE_TOKEN is empty")
-    void constructorThrowsWhenTokenEmpty() {
-        assertThrows(IllegalStateException.class,
-                () -> new OrgApiClient("", "org-123"));
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is empty")
+    void constructorCreatesUnavailableClientWhenTokenEmpty() {
+        OrgApiClient client = new OrgApiClient("", "org-123");
+        assertNotNull(client);
+        assertFalse(client.isAvailable());
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when DEVIN_ORG_SERVICE_TOKEN is null")
-    void constructorThrowsWhenTokenNull() {
-        assertThrows(IllegalStateException.class,
-                () -> new OrgApiClient(null, "org-123"));
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is null")
+    void constructorCreatesUnavailableClientWhenTokenNull() {
+        OrgApiClient client = new OrgApiClient(null, "org-123");
+        assertNotNull(client);
+        assertFalse(client.isAvailable());
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when DEVIN_ORG_SERVICE_TOKEN is blank")
-    void constructorThrowsWhenTokenBlank() {
-        assertThrows(IllegalStateException.class,
-                () -> new OrgApiClient("   ", "org-123"));
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is blank")
+    void constructorCreatesUnavailableClientWhenTokenBlank() {
+        OrgApiClient client = new OrgApiClient("   ", "org-123");
+        assertNotNull(client);
+        assertFalse(client.isAvailable());
     }
 
     @Test

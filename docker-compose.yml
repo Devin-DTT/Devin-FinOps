@@ -1,0 +1,53 @@
+# =============================================================================
+# Devin FinOps Dashboard - Docker Compose (local development)
+#
+# Usage:
+#   docker-compose up --build        # build and start both services
+#   docker-compose up -d             # start in detached mode
+#   docker-compose down              # stop and remove containers
+#   docker-compose logs -f backend   # follow backend logs
+#
+# Environment variables are loaded from .env in the project root.
+# Copy .env.example to .env and fill in the required tokens.
+# =============================================================================
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: devin-finops-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - DEVIN_ENTERPRISE_SERVICE_TOKEN=${DEVIN_ENTERPRISE_SERVICE_TOKEN}
+      - DEVIN_SERVICE_TOKEN=${DEVIN_SERVICE_TOKEN:-}
+      - DEVIN_ORG_SERVICE_TOKEN=${DEVIN_ORG_SERVICE_TOKEN}
+      - DEVIN_ORG_ID=${DEVIN_ORG_ID:-}
+      - DASHBOARD_POLLING_INTERVAL_SECONDS=${DASHBOARD_POLLING_INTERVAL_SECONDS:-5}
+      - DASHBOARD_ORG_DISCOVERY_REFRESH_SECONDS=${DASHBOARD_ORG_DISCOVERY_REFRESH_SECONDS:-60}
+    volumes:
+      - backend-data:/app/data
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: devin-finops-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  backend-data:

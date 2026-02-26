@@ -1,9 +1,13 @@
 package com.devin.dashboard.websocket;
 
+import com.devin.dashboard.config.DashboardProperties;
 import com.devin.dashboard.config.EndpointLoader;
 import com.devin.dashboard.model.EndpointDefinition;
 import com.devin.dashboard.service.DevinApiClient;
 import com.devin.dashboard.service.OrgApiClient;
+import com.devin.dashboard.service.OrgDiscoveryService;
+import com.devin.dashboard.service.SnapshotService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -13,22 +17,15 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -39,9 +36,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * WebSocket handler that bridges the Devin API with connected frontend clients.
  *
- * <p>On connection, starts a polling loop (every 5 seconds) that queries all GET
- * endpoints defined in {@code endpoints.yaml} via {@link DevinApiClient}, then
- * pushes the results as JSON messages to the WebSocket client.</p>
+ * <p>On connection, starts a polling loop that queries all GET endpoints defined
+ * in {@code endpoints.yaml} via the appropriate API client (enterprise or
+ * organization), then pushes the results as JSON messages to the WebSocket client.</p>
+ *
+ * <p>Delegates caching/persistence to {@link SnapshotService} and organization
+ * discovery to {@link OrgDiscoveryService}.</p>
  *
  * <p>On disconnection, all active Flux subscriptions and scheduled tasks are
  * cancelled cleanly to prevent resource leaks.</p>
@@ -53,23 +53,29 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     private final DevinApiClient devinApiClient;
     private final OrgApiClient orgApiClient;
     private final EndpointLoader endpointLoader;
+    private final SnapshotService snapshotService;
+    private final OrgDiscoveryService orgDiscoveryService;
+    private final DashboardProperties properties;
 
     public DevinWebSocketHandler(DevinApiClient devinApiClient,
                                   OrgApiClient orgApiClient,
-                                  EndpointLoader endpointLoader) {
+                                  EndpointLoader endpointLoader,
+                                  SnapshotService snapshotService,
+                                  OrgDiscoveryService orgDiscoveryService,
+                                  DashboardProperties properties) {
         this.devinApiClient = devinApiClient;
         this.orgApiClient = orgApiClient;
         this.endpointLoader = endpointLoader;
+        this.snapshotService = snapshotService;
+        this.orgDiscoveryService = orgDiscoveryService;
+        this.properties = properties;
+        this.scheduler = Executors.newScheduledThreadPool(properties.getSchedulerPoolSize());
+    }
 
-        // If multi-org mode, start async org discovery that refreshes every 60 seconds
-        if (orgApiClient.getOrgId().isEmpty()) {
-            orgDiscoveryExecutor.scheduleAtFixedRate(
-                    this::refreshOrgIds, 0, 60, TimeUnit.SECONDS);
-        } else {
-            // Single-org: use configured value, mark as initialized
-            this.cachedOrgIds = List.of(orgApiClient.getOrgId().get());
-            this.orgDiscoveryInitialized = true;
-        }
+    @PreDestroy
+    void shutdown() {
+        scheduler.shutdownNow();
+        log.info("WebSocket polling scheduler shut down.");
     }
 
     /** Tracks active polling tasks per session so they can be cancelled on disconnect. */
@@ -78,34 +84,18 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
     /** Tracks active reactive subscriptions per session. */
     private final Map<String, List<Disposable>> activeSubscriptions = new ConcurrentHashMap<>();
 
-    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
-
-    /** Single-thread executor for asynchronous org discovery (avoids blocking scheduler threads). */
-    private final ScheduledExecutorService orgDiscoveryExecutor = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduler;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    /** In-memory cache of the latest API response per endpoint (key = endpoint name). */
-    private final Map<String, JsonNode> latestSnapshot = new ConcurrentHashMap<>();
-
-    /** Cached list of discovered organization IDs (refreshed every 60 seconds). */
-    private volatile List<String> cachedOrgIds = Collections.emptyList();
-
-    /** Whether the initial org discovery has completed at least once. */
-    private volatile boolean orgDiscoveryInitialized = false;
-
-    private static final Path SNAPSHOT_DIR = Paths.get("data");
-    private static final Path SNAPSHOT_FILE = SNAPSHOT_DIR.resolve("latest-snapshot.json");
-    private static final ObjectMapper prettyMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         log.info("WebSocket connected: sessionId={}", session.getId());
 
-        // Start polling every 5 seconds
+        long pollingInterval = properties.getPollingIntervalSeconds();
         ScheduledFuture<?> future = scheduler.scheduleAtFixedRate(
                 () -> pollEndpoints(session),
-                0, 5, TimeUnit.SECONDS
+                0, pollingInterval, TimeUnit.SECONDS
         );
         scheduledTasks.put(session.getId(), future);
     }
@@ -156,14 +146,19 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
         List<EndpointDefinition> readEndpoints = endpointLoader.getReadEndpoints();
 
-        // Use cached org IDs (refreshed asynchronously every 60s)
-        List<String> orgIds = cachedOrgIds;
+        // Use cached org IDs from OrgDiscoveryService
+        List<String> orgIds = orgDiscoveryService.getCachedOrgIds();
 
-        // Calculate total expected responses
+        // Whether org endpoints should be polled this cycle
+        boolean pollOrgEndpoints = orgApiClient.isAvailable() && !orgIds.isEmpty();
+
+        // Calculate total expected responses (must mirror the skip logic below)
         int totalEndpoints = 0;
         for (EndpointDefinition endpoint : readEndpoints) {
             if ("organization".equalsIgnoreCase(endpoint.getScope())) {
-                totalEndpoints += orgIds.size();
+                if (pollOrgEndpoints) {
+                    totalEndpoints += orgIds.size();
+                }
             } else {
                 totalEndpoints++;
             }
@@ -177,8 +172,8 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 String scope = endpoint.getScope();
 
                 if ("organization".equalsIgnoreCase(scope)) {
-                    if (orgIds.isEmpty()) {
-                        // No orgs available, skip organization endpoints
+                    if (!pollOrgEndpoints) {
+                        // Org client not configured or no orgs discovered -- skip
                         continue;
                     }
                     // Iterate over each discovered org
@@ -196,10 +191,10 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                                     dataChunks -> {
                                         String rawData = String.join("", dataChunks);
                                         String payload = buildPayload(endpoint.getName(), rawData);
-                                        cacheEndpointData(endpoint.getName(), rawData);
+                                        snapshotService.cacheEndpointData(endpoint.getName(), rawData);
                                         sendMessage(session, payload);
                                         if (completedCount.incrementAndGet() >= finalTotalEndpoints) {
-                                            writeSnapshotToDisk();
+                                            snapshotService.writeSnapshotToDisk();
                                         }
                                     },
                                     error -> {
@@ -236,7 +231,7 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         Flux<String> responseFlux = orgApiClient.get(endpoint, pathParams);
 
         // Cache key includes org ID for snapshot differentiation in multi-org mode
-        boolean multiOrg = orgApiClient.getOrgId().isEmpty();
+        boolean multiOrg = orgDiscoveryService.isMultiOrg();
         String cacheKey = multiOrg
                 ? endpoint.getName() + "__org_" + currentOrgId
                 : endpoint.getName();
@@ -249,10 +244,10 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                             // Use original endpoint name for frontend switch compatibility;
                             // include org_id as separate field in the JSON payload
                             String payload = buildPayload(endpoint.getName(), rawData, currentOrgId);
-                            cacheEndpointData(cacheKey, rawData);
+                            snapshotService.cacheEndpointData(cacheKey, rawData);
                             sendMessage(session, payload);
                             if (completedCount.incrementAndGet() >= totalEndpoints) {
-                                writeSnapshotToDisk();
+                                snapshotService.writeSnapshotToDisk();
                             }
                         },
                         error -> {
@@ -265,66 +260,6 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         activeSubscriptions
                 .computeIfAbsent(session.getId(), k -> Collections.synchronizedList(new ArrayList<>()))
                 .add(subscription);
-    }
-
-    /**
-     * Asynchronously refreshes the cached list of organization IDs.
-     * Runs on a dedicated single-thread executor every 60 seconds to avoid
-     * blocking the WebSocket polling scheduler threads.
-     */
-    private void refreshOrgIds() {
-        Optional<EndpointDefinition> listOrgsEndpoint = endpointLoader.findByName("list_organizations");
-        if (listOrgsEndpoint.isEmpty()) {
-            log.warn("list_organizations endpoint not found in endpoints.yaml. "
-                    + "Cannot auto-discover organizations. Skipping organization-scoped endpoints.");
-            orgDiscoveryInitialized = true;
-            return;
-        }
-
-        try {
-            String responseBody = devinApiClient.get(listOrgsEndpoint.get(), Collections.emptyMap())
-                    .collectList()
-                    .map(chunks -> String.join("", chunks))
-                    .block(java.time.Duration.ofSeconds(10));
-
-            if (responseBody == null || responseBody.isBlank()) {
-                log.warn("list_organizations returned empty response. Keeping previous cached org IDs.");
-                orgDiscoveryInitialized = true;
-                return;
-            }
-
-            JsonNode root = objectMapper.readTree(responseBody);
-            List<String> orgIds = new ArrayList<>();
-
-            // Try common JSON structures: items[], organizations[], or root array
-            JsonNode itemsNode = root.has("items") ? root.get("items")
-                    : root.has("organizations") ? root.get("organizations")
-                    : root.isArray() ? root : null;
-
-            if (itemsNode != null && itemsNode.isArray()) {
-                for (JsonNode orgNode : itemsNode) {
-                    // Try "id" first, then "org_id"
-                    JsonNode idNode = orgNode.has("id") ? orgNode.get("id")
-                            : orgNode.has("org_id") ? orgNode.get("org_id") : null;
-                    if (idNode != null && !idNode.asText().isBlank()) {
-                        orgIds.add(idNode.asText());
-                    }
-                }
-            }
-
-            if (orgIds.isEmpty()) {
-                log.warn("list_organizations returned no org IDs. Response: {}",
-                        responseBody.length() > 500 ? responseBody.substring(0, 500) + "..." : responseBody);
-            } else {
-                log.info("Auto-discovered {} organization(s): {}", orgIds.size(), orgIds);
-                this.cachedOrgIds = List.copyOf(orgIds);
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to call list_organizations for multi-org discovery: {}", e.getMessage());
-        } finally {
-            orgDiscoveryInitialized = true;
-        }
     }
 
     /**
@@ -379,50 +314,6 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 log.error("Failed to send message to session {}: {}", session.getId(), e.getMessage());
             }
         }
-    }
-
-    /**
-     * Caches the parsed JSON response for the given endpoint name.
-     */
-    private void cacheEndpointData(String endpointName, String rawData) {
-        try {
-            if (rawData != null && !rawData.isEmpty()) {
-                JsonNode parsed = objectMapper.readTree(rawData);
-                latestSnapshot.put(endpointName, parsed);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to cache data for endpoint {}: {}", endpointName, e.getMessage());
-        }
-    }
-
-    /**
-     * Writes the current in-memory snapshot to data/latest-snapshot.json.
-     */
-    private void writeSnapshotToDisk() {
-        try {
-            if (!Files.exists(SNAPSHOT_DIR)) {
-                Files.createDirectories(SNAPSHOT_DIR);
-            }
-            ObjectNode snapshotNode = prettyMapper.createObjectNode();
-            snapshotNode.put("timestamp", System.currentTimeMillis());
-            ObjectNode endpointsNode = snapshotNode.putObject("endpoints");
-            for (Map.Entry<String, JsonNode> entry : latestSnapshot.entrySet()) {
-                endpointsNode.set(entry.getKey(), entry.getValue());
-            }
-            String json = prettyMapper.writeValueAsString(snapshotNode);
-            Files.writeString(SNAPSHOT_FILE, json,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            log.debug("Snapshot written to {}", SNAPSHOT_FILE);
-        } catch (Exception e) {
-            log.warn("Failed to write snapshot to disk: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * Returns the latest cached snapshot (read-only view).
-     */
-    public Map<String, JsonNode> getLatestSnapshot() {
-        return Collections.unmodifiableMap(latestSnapshot);
     }
 
     /**
