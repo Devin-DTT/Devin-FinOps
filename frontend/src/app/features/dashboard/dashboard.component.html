@@ -230,6 +230,220 @@
       </div>
     </mat-tab>
 
+    <!-- ==================== Optimización de Costes ==================== -->
+    <mat-tab label="Optimización de Costes">
+      <div class="tab-content">
+
+        <!-- SECCIÓN 1 — KPI Cards principales (fila de 4) -->
+        <div class="finops-section-title">KPIs de Eficiencia</div>
+        <div class="kpi-section">
+          <mat-card class="kpi-card kpi-acu">
+            <mat-card-header>
+              <mat-card-title>ACUs / PR</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ acuPerPr | number:'1.2-2' }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>PRs / ACU</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ prsPerAcu | number:'1.3-3' }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>% Sesiones con Outcome</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ sessionSuccessRate | number:'1.1-1' }} %</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Waste-to-Outcome Ratio</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ wasteToOutcomeRatio | number:'1.2-2' }}</span>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+        <!-- SECCIÓN 2 — KPI Cards secundarias (fila de 4) -->
+        <div class="finops-section-title">Desglose de Sesiones</div>
+        <div class="kpi-section">
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Sesiones Finished</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.finishedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Sesiones Failed</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.failedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>Sesiones Stopped</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ state.stoppedSessions }}</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card">
+            <mat-card-header>
+              <mat-card-title>ACUs desperdiciados (proxy)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value">{{ acuWasted | number:'1.1-1' }}</span>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+        <!-- SECCIÓN 3 — Barra de eficiencia -->
+        <div class="finops-section-title">Eficiencia de Sesiones</div>
+        <div class="kpi-section">
+          <mat-card class="kpi-card wide-card">
+            <mat-card-header>
+              <mat-card-title>Session Success Rate</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <mat-progress-bar mode="determinate" [value]="sessionSuccessRate" class="acu-bar"></mat-progress-bar>
+              <span class="kpi-sub">{{ sessionSuccessRate | number:'1.1-1' }}% sesiones con outcome ({{ state.finishedSessions }} finished / {{ state.totalSessions }} totales)</span>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+        <!-- SECCIÓN 4 — Gráfico PRs por día -->
+        <div class="finops-section-title">Actividad de PRs</div>
+        <div class="charts-row">
+          <mat-card class="chart-card">
+            <mat-card-header>
+              <mat-card-title>PRs por Día (Total)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <div class="chart-container">
+                <canvas baseChart
+                        [data]="prsChartData"
+                        [options]="prsChartOptions"
+                        type="bar">
+                </canvas>
+              </div>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+        <!-- SECCIÓN 5 — Cards N/A (datos no disponibles en API) -->
+        <div class="finops-section-title">Datos No Disponibles en API</div>
+        <div class="kpi-section">
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Coste por PR (&euro;)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Sin conversión ACU→coste en API</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> ACUs / PR mergeado</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">/metrics/prs sin breakdown por estado</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Tasa de éxito de PR</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">/metrics/prs sin breakdown por estado</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> ROI por sesión</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Sin datos de valor de negocio</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Sesiones idle (>X min)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Sin métricas de duración por sesión</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Ahorro FinOps (%)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Sin baseline en API</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> ACU Efficiency Index (AFI)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Requiere datos no disponibles</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Cost Velocity Ratio (CVR)</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Requiere datos de velocidad</span>
+            </mat-card-content>
+          </mat-card>
+
+          <mat-card class="kpi-card kpi-card-na">
+            <mat-card-header>
+              <mat-card-title><mat-icon>info</mat-icon> Ahorro FinOps acumulado</mat-card-title>
+            </mat-card-header>
+            <mat-card-content>
+              <span class="kpi-value-na">N/A</span>
+              <span class="kpi-sub-na">Sin histórico de referencia</span>
+            </mat-card-content>
+          </mat-card>
+        </div>
+
+      </div>
+    </mat-tab>
+
   </mat-tab-group>
 
   <!-- Last Updated -->
