@@ -170,8 +170,13 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         // Use cached org IDs from OrgDiscoveryService
         List<String> orgIds = orgDiscoveryService.getCachedOrgIds();
 
-        // Whether org endpoints should be polled this cycle
-        boolean pollOrgEndpoints = orgApiClient.isAvailable() && !orgIds.isEmpty();
+        // Whether org endpoints should be polled this cycle.
+        // We can poll org endpoints when we have discovered org IDs AND at least one
+        // client is available: the org client (preferred) or the enterprise client
+        // (fallback, since enterprise tokens can access org-scoped endpoints when
+        // {org_id} is provided in the URL path).
+        boolean pollOrgEndpoints = !orgIds.isEmpty()
+                && (orgApiClient.isAvailable() || devinApiClient != null);
 
         // Calculate total expected responses (must mirror the skip logic below)
         int totalEndpoints = 0;
@@ -248,13 +253,25 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
      * <p>The WebSocket message uses the original endpoint name (e.g. {@code list_sessions})
      * for frontend compatibility, with {@code org_id} included as a separate field in the
      * JSON payload. The cache key includes the org ID suffix for snapshot differentiation.</p>
+     *
+     * <p>When the org-scoped service token is not configured, falls back to the enterprise
+     * client. Enterprise tokens can access organization-scoped endpoints as long as
+     * {@code {org_id}} is present in the URL path.</p>
      */
     private void pollOrgEndpoint(WebSocketSession session, EndpointDefinition endpoint,
                                  String currentOrgId, AtomicInteger completedCount, int totalEndpoints) {
         Map<String, String> pathParams = new HashMap<>();
         pathParams.put("org_id", currentOrgId);
 
-        Flux<String> responseFlux = orgApiClient.get(endpoint, pathParams);
+        // Prefer org client; fall back to enterprise client when org token is absent
+        Flux<String> responseFlux;
+        if (orgApiClient.isAvailable()) {
+            responseFlux = orgApiClient.get(endpoint, pathParams);
+        } else {
+            log.debug("Using enterprise client as fallback for org endpoint {} (org {})",
+                    endpoint.getName(), currentOrgId);
+            responseFlux = devinApiClient.get(endpoint, pathParams);
+        }
 
         // Cache key includes org ID for snapshot differentiation in multi-org mode
         boolean multiOrg = orgDiscoveryService.isMultiOrg();

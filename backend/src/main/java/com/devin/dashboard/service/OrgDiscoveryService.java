@@ -62,24 +62,22 @@ public class OrgDiscoveryService {
 
     @PostConstruct
     void start() {
-        if (!orgApiClient.isAvailable()) {
-            // No org token configured -- skip discovery entirely
-            this.initialized = true;
-            log.info("Org discovery disabled: DEVIN_ORG_SERVICE_TOKEN not configured.");
-            return;
-        }
-
         if (orgApiClient.getOrgId().isPresent()) {
             // Single-org: use configured value, mark as initialized
             this.cachedOrgIds = List.of(orgApiClient.getOrgId().get());
             this.initialized = true;
             log.info("Single-org mode: using configured org ID {}", orgApiClient.getOrgId().get());
         } else {
-            // Multi-org: start periodic discovery
+            // Multi-org: start periodic discovery using the enterprise token.
+            // Discovery always uses the enterprise client (devinApiClient) to call
+            // list_organizations, so it works even when DEVIN_ORG_SERVICE_TOKEN is
+            // not configured.  The WebSocket handler will use whichever client is
+            // available (org client preferred, enterprise client as fallback).
             long refreshSeconds = properties.getOrgDiscoveryRefreshSeconds();
             discoveryExecutor.scheduleAtFixedRate(
                     this::refreshOrgIds, 0, refreshSeconds, TimeUnit.SECONDS);
-            log.info("Multi-org mode: discovery will refresh every {}s", refreshSeconds);
+            log.info("Multi-org mode: discovery will refresh every {}s (org token available: {})",
+                    refreshSeconds, orgApiClient.isAvailable());
         }
     }
 
