@@ -100,6 +100,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.state.totalSessions > 0 ? this.state.currentCycleAcu / this.state.totalSessions : 0;
   }
 
+  // Optimización de Costes — derived getters
+  get totalPrsCount(): number {
+    return this.state.prsMetrics.reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
+  }
+  get acuPerPr(): number {
+    return this.totalPrsCount > 0 ? this.state.currentCycleAcu / this.totalPrsCount : 0;
+  }
+  get prsPerAcu(): number {
+    return this.state.currentCycleAcu > 0 ? this.totalPrsCount / this.state.currentCycleAcu : 0;
+  }
+  get sessionSuccessRate(): number {
+    return this.state.totalSessions > 0
+      ? (this.state.finishedSessions / this.state.totalSessions) * 100
+      : 0;
+  }
+  get wasteToOutcomeRatio(): number {
+    return this.state.finishedSessions > 0
+      ? (this.state.failedSessions + this.state.stoppedSessions) / this.state.finishedSessions
+      : 0;
+  }
+  get acuWasted(): number {
+    return this.state.totalSessions > 0
+      ? ((this.state.failedSessions + this.state.stoppedSessions) / this.state.totalSessions)
+          * this.state.currentCycleAcu
+      : 0;
+  }
+
   // Chart: Active sessions over time
   lineChartData: ChartData<'line'> = {
     labels: [],
