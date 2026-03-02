@@ -92,6 +92,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ACU usage percentage for progress bar
   acuUsagePercent = 0;
 
+  // Calculated FinOps metrics
+  get acuPerUser(): number {
+    return this.state.userCount > 0 ? this.state.currentCycleAcu / this.state.userCount : 0;
+  }
+  get acuPerSession(): number {
+    return this.state.totalSessions > 0 ? this.state.currentCycleAcu / this.state.totalSessions : 0;
+  }
+
   // Chart: Active sessions over time
   lineChartData: ChartData<'line'> = {
     labels: [],
