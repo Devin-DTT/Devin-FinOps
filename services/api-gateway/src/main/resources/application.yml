@@ -12,7 +12,7 @@ spring:
           uri: ${WEBSOCKET_SERVICE_URL:ws://localhost:8082}
           predicates:
             - Path=/ws/**
-        # Sessions API -> sessions-service (Phase 2, routed to websocket-service for now)
+        # Sessions API -> sessions-service (Phase 2)
         - id: sessions-service
           uri: ${SESSIONS_SERVICE_URL:http://localhost:8083}
           predicates:

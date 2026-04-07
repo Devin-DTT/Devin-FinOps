@@ -1,0 +1,101 @@
+<div class="tab-content">
+  <!-- Trigger data binding -->
+  <ng-container *ngIf="tableData"></ng-container>
+
+  <!-- KPIs de Eficiencia -->
+  <div class="finops-section-title">KPIs de Eficiencia</div>
+  <div class="kpi-section">
+    <app-kpi-card title="ACUs / PR" [value]="acuPerPr" format="decimal2" cssClass="kpi-acu"></app-kpi-card>
+    <app-kpi-card title="PRs / ACU" [value]="prsPerAcu" format="decimal3"></app-kpi-card>
+    <app-kpi-card title="% Sesiones con Outcome" [value]="sessionsState.sessionSuccessRate()" format="percent"></app-kpi-card>
+    <app-kpi-card title="Waste-to-Outcome Ratio" [value]="sessionsState.wasteToOutcomeRatio()" format="decimal2"></app-kpi-card>
+  </div>
+
+  <!-- Desglose de Sesiones -->
+  <div class="finops-section-title">Desglose de Sesiones</div>
+  <div class="kpi-section">
+    <app-kpi-card title="Sesiones Finished" [value]="sessionsState.finishedSessions()"></app-kpi-card>
+    <app-kpi-card title="Sesiones Failed" [value]="sessionsState.failedSessions()"></app-kpi-card>
+    <app-kpi-card title="Sesiones Stopped" [value]="sessionsState.stoppedSessions()"></app-kpi-card>
+    <app-kpi-card title="ACUs desperdiciados (proxy)" [value]="acuWasted" format="decimal"></app-kpi-card>
+  </div>
+
+  <!-- Eficiencia de Sesiones -->
+  <div class="finops-section-title">Eficiencia de Sesiones</div>
+  <div class="kpi-section">
+    <mat-card class="kpi-card wide-card">
+      <mat-card-header>
+        <mat-card-title>Session Success Rate</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-progress-bar mode="determinate" [value]="sessionsState.sessionSuccessRate()" class="acu-bar"></mat-progress-bar>
+        <span class="kpi-sub">{{ sessionsState.sessionSuccessRate() | number:'1.1-1' }}% sesiones con outcome ({{ sessionsState.finishedSessions() }} finished / {{ sessionsState.totalSessions() }} totales)</span>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Charts -->
+  <div class="finops-section-title">Actividad</div>
+  <div class="charts-row">
+    <app-chart-card title="Distribución de Sesiones" [chartData]="sessionDonutData" [chartOptions]="sessionDonutOptions" chartType="doughnut"></app-chart-card>
+    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
+  </div>
+
+  <!-- Sessions Table -->
+  <div class="finops-section-title">Tabla de Sesiones</div>
+  <mat-card class="table-card">
+    <mat-card-header>
+      <mat-card-title>Sessions</mat-card-title>
+      <mat-form-field class="status-filter" appearance="outline">
+        <mat-label>Filter by status</mat-label>
+        <mat-select [(ngModel)]="selectedStatusFilter" (selectionChange)="onStatusFilterChange()">
+          <mat-option *ngFor="let status of statusOptions" [value]="status">{{ status | titlecase }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </mat-card-header>
+    <mat-card-content>
+      <table mat-table [dataSource]="dataSource" matSort class="sessions-table">
+        <ng-container matColumnDef="session_id">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Session ID</th>
+          <td mat-cell *matCellDef="let session" class="id-cell" [matTooltip]="session.session_id">{{ session.session_id }}</td>
+        </ng-container>
+        <ng-container matColumnDef="title">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Title</th>
+          <td mat-cell *matCellDef="let session">{{ session.title || '-' }}</td>
+        </ng-container>
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+          <td mat-cell *matCellDef="let session">
+            <mat-chip-set>
+              <mat-chip [color]="getStatusColor(session.status)" selected>{{ session.status }}</mat-chip>
+            </mat-chip-set>
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="origin">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Origin</th>
+          <td mat-cell *matCellDef="let session">{{ session.origin || '-' }}</td>
+        </ng-container>
+        <ng-container matColumnDef="created_at">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>Created</th>
+          <td mat-cell *matCellDef="let session">{{ formatTimestamp(session.created_at) }}</td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- N/A Cards -->
+  <div class="finops-section-title">Datos No Disponibles en API</div>
+  <div class="kpi-section">
+    <app-na-card title="Coste por PR (€)" reason="Sin conversión ACU→coste en API"></app-na-card>
+    <app-na-card title="ACUs / PR mergeado" reason="/metrics/prs sin breakdown por estado"></app-na-card>
+    <app-na-card title="Tasa de éxito de PR" reason="/metrics/prs sin breakdown por estado"></app-na-card>
+    <app-na-card title="ROI por sesión" reason="Sin datos de valor de negocio"></app-na-card>
+    <app-na-card title="Sesiones idle (>X min)" reason="Sin métricas de duración por sesión"></app-na-card>
+    <app-na-card title="Ahorro FinOps (%)" reason="Sin baseline en API"></app-na-card>
+    <app-na-card title="ACU Efficiency Index (AFI)" reason="Requiere datos no disponibles"></app-na-card>
+    <app-na-card title="Cost Velocity Ratio (CVR)" reason="Requiere datos de velocidad"></app-na-card>
+    <app-na-card title="Ahorro FinOps acumulado" reason="Sin histórico de referencia"></app-na-card>
+  </div>
+</div>

@@ -1,0 +1,27 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: billing-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+billing:
+  redis-key-prefix: "finops:endpoint:"
+  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_TOKEN:}
+
+logging:
+  level:
+    com.devin.finops.billing: DEBUG

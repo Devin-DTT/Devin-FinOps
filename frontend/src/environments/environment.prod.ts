@@ -5,5 +5,8 @@ export const environment = {
   // so it works behind any domain or load balancer.
   wsUrl: (typeof window !== 'undefined' && (window as Record<string, unknown>)['__WS_URL__'])
     ? String((window as Record<string, unknown>)['__WS_URL__'])
-    : ((typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss://' : 'ws://') + (typeof window !== 'undefined' ? window.location.host : 'localhost:8080') + '/ws/devin-data'
+    : ((typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'wss://' : 'ws://') + (typeof window !== 'undefined' ? window.location.host : 'localhost:8080') + '/ws/devin-data',
+  apiUrl: (typeof window !== 'undefined' && (window as Record<string, unknown>)['__API_URL__'])
+    ? String((window as Record<string, unknown>)['__API_URL__'])
+    : ((typeof window !== 'undefined' && window.location.protocol === 'https:') ? 'https://' : 'http://') + (typeof window !== 'undefined' ? window.location.host : 'localhost:8080') + '/api'
 };

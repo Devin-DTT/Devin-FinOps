@@ -1,0 +1,19 @@
+<div class="tab-content">
+  <!-- Infrastructure KPIs -->
+  <div class="finops-section-title">Infraestructura y Administración</div>
+  <div class="kpi-section">
+    <app-kpi-card title="Organizaciones" [value]="adminState.orgCount()"></app-kpi-card>
+    <app-kpi-card title="Usuarios" [value]="adminState.userCount()"></app-kpi-card>
+    <app-kpi-card title="Hypervisors" [value]="adminState.hypervisorCount()"></app-kpi-card>
+    <mat-card class="kpi-card">
+      <mat-card-header>
+        <mat-card-title>Queue Status</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-chip-set>
+          <mat-chip [color]="getQueueStatusColor()" selected>{{ adminState.queueStatus() | titlecase }}</mat-chip>
+        </mat-chip-set>
+      </mat-card-content>
+    </mat-card>
+  </div>
+</div>

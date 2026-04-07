@@ -1,0 +1,47 @@
+<div class="tab-content">
+  <!-- KPIs Principales -->
+  <div class="finops-section-title">KPIs Principales</div>
+  <div class="kpi-section">
+    <app-kpi-card title="ACUs Ciclo Actual" [value]="billingState.currentCycleAcu()" format="decimal" cssClass="kpi-acu"></app-kpi-card>
+    <app-kpi-card title="Límite ACU" [value]="billingState.currentCycleLimit()" format="integer"></app-kpi-card>
+    <app-kpi-card title="Total Sesiones" [value]="sessionsState.totalSessions()"></app-kpi-card>
+    <app-kpi-card title="Usuarios Activos" [value]="adminState.userCount()"></app-kpi-card>
+  </div>
+
+  <!-- Métricas Calculadas -->
+  <div class="finops-section-title">Métricas Calculadas</div>
+  <div class="kpi-section">
+    <app-kpi-card title="ACUs por Usuario (ciclo)" [value]="acuPerUser" format="decimal2"></app-kpi-card>
+    <app-kpi-card title="ACUs por Sesión (ciclo)" [value]="acuPerSession" format="decimal2"></app-kpi-card>
+  </div>
+
+  <!-- Progreso ACU -->
+  <div class="finops-section-title">Progreso ACU</div>
+  <div class="kpi-section">
+    <mat-card class="kpi-card kpi-acu wide-card">
+      <mat-card-header>
+        <mat-card-title>ACU Usage Progress</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-progress-bar mode="determinate" [value]="billingState.acuUsagePercent()" class="acu-bar"></mat-progress-bar>
+        <span class="kpi-sub">{{ billingState.acuUsagePercent() }}% usado ({{ billingState.currentCycleAcu() | number:'1.1-1' }} / {{ billingState.currentCycleLimit() | number:'1.0-0' }} ACUs)</span>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <!-- Consumo y Facturación -->
+  <div class="finops-section-title">Consumo y Facturación</div>
+  <div class="charts-row">
+    <app-chart-card title="Consumo Diario de ACUs" [chartData]="acuChartData" [chartOptions]="acuChartOptions" chartType="line"></app-chart-card>
+    <app-chart-card title="Histórico de Ciclos de Facturación" [chartData]="billingCyclesChartData" [chartOptions]="billingCyclesChartOptions" chartType="bar"></app-chart-card>
+  </div>
+
+  <!-- N/A Cards -->
+  <div class="finops-section-title">Datos No Disponibles en API</div>
+  <div class="kpi-section">
+    <app-na-card title="Coste Mes (€)" reason="No disponible en API"></app-na-card>
+    <app-na-card title="Coste por Organización" reason="No disponible en API"></app-na-card>
+    <app-na-card title="ACUs por Desarrollador" reason="No disponible en API"></app-na-card>
+    <app-na-card title="PRs por Estado" reason="La API /metrics/prs devuelve totales por día sin distinción de estado"></app-na-card>
+  </div>
+</div>
