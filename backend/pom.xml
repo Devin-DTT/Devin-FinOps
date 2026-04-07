@@ -5,17 +5,15 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.4</version>
-        <relativePath/>
+        <groupId>com.devin</groupId>
+        <artifactId>devin-finops-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.devin</groupId>
     <artifactId>dashboard</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>devin-dashboard</name>
-    <description>Devin FinOps Dashboard - Spring Boot Backend</description>
+    <description>Devin FinOps Dashboard - Spring Boot Backend (DEPRECATED: being split into microservices)</description>
 
     <properties>
         <java.version>17</java.version>

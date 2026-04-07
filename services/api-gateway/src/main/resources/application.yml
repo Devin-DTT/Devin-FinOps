@@ -1,0 +1,57 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        # WebSocket traffic -> websocket-service
+        - id: websocket-service
+          uri: ${WEBSOCKET_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/ws/**
+        # Sessions API -> sessions-service (Phase 2, routed to websocket-service for now)
+        - id: sessions-service
+          uri: ${SESSIONS_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/sessions/**
+        # Billing API -> billing-service (Phase 2)
+        - id: billing-service
+          uri: ${BILLING_SERVICE_URL:http://localhost:8084}
+          predicates:
+            - Path=/api/billing/**
+        # Metrics API -> metrics-service (Phase 2)
+        - id: metrics-service
+          uri: ${METRICS_SERVICE_URL:http://localhost:8085}
+          predicates:
+            - Path=/api/metrics/**
+        # Admin API -> admin-service (Phase 2)
+        - id: admin-service
+          uri: ${ADMIN_SERVICE_URL:http://localhost:8086}
+          predicates:
+            - Path=/api/admin/**
+
+# Actuator - only health endpoint exposed (NOT routed through gateway publicly)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+# JWT configuration
+gateway:
+  jwt:
+    enabled: ${GATEWAY_JWT_ENABLED:false}
+    secret: ${GATEWAY_JWT_SECRET:default-dev-secret-key-that-is-at-least-256-bits-long}
+  cors:
+    allowed-origins: ${GATEWAY_CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
+logging:
+  level:
+    com.devin.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
