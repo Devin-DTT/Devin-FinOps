@@ -14,6 +14,10 @@ COPY shared/common-models/pom.xml ./shared/common-models/pom.xml
 COPY services/api-gateway/pom.xml ./services/api-gateway/pom.xml
 COPY services/data-collector/pom.xml ./services/data-collector/pom.xml
 COPY services/websocket-service/pom.xml ./services/websocket-service/pom.xml
+COPY services/sessions-service/pom.xml ./services/sessions-service/pom.xml
+COPY services/billing-service/pom.xml ./services/billing-service/pom.xml
+COPY services/metrics-service/pom.xml ./services/metrics-service/pom.xml
+COPY services/admin-service/pom.xml ./services/admin-service/pom.xml
 COPY backend/pom.xml ./backend/pom.xml
 
 # Download dependencies (cached layer)
