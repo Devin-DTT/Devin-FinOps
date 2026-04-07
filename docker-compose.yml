@@ -1,11 +1,11 @@
 # =============================================================================
-# Devin FinOps Dashboard - Docker Compose (local development)
+# Devin FinOps Dashboard - Docker Compose (Microservices Architecture)
 #
 # Usage:
-#   docker-compose up --build        # build and start both services
+#   docker-compose up --build        # build and start all services
 #   docker-compose up -d             # start in detached mode
 #   docker-compose down              # stop and remove containers
-#   docker-compose logs -f backend   # follow backend logs
+#   docker-compose logs -f data-collector   # follow data-collector logs
 #
 # Environment variables are loaded automatically:
 #   1. .env.example is always loaded (safe defaults / placeholders).
@@ -14,24 +14,36 @@
 # =============================================================================
 
 services:
-  backend:
+  # --- Redis (shared cache and Pub/Sub) ---
+  redis:
+    image: redis:7-alpine
+    container_name: devin-finops-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # --- API Gateway (Spring Cloud Gateway) ---
+  api-gateway:
     build:
       context: .
-      dockerfile: backend/Dockerfile
-    container_name: devin-finops-backend
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: devin-finops-api-gateway
     ports:
       - "8080:8080"
-    env_file:
-      - path: .env.example
-        required: true
-      - path: .env
-        required: false
     environment:
-      - DASHBOARD_POLLING_INTERVAL_SECONDS=${DASHBOARD_POLLING_INTERVAL_SECONDS:-5}
-      - DASHBOARD_ORG_DISCOVERY_REFRESH_SECONDS=${DASHBOARD_ORG_DISCOVERY_REFRESH_SECONDS:-60}
-    volumes:
-      - backend-data:/app/data
-      - ./endpoints.yaml:/app/endpoints.yaml:ro
+      - WEBSOCKET_SERVICE_URL=ws://websocket-service:8082
+      - GATEWAY_JWT_ENABLED=${GATEWAY_JWT_ENABLED:-false}
+      - GATEWAY_CORS_ALLOWED_ORIGINS=${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+    depends_on:
+      websocket-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -40,6 +52,58 @@ services:
       start_period: 15s
     restart: unless-stopped
 
+  # --- Data Collector (polls Devin API, publishes to Redis) ---
+  data-collector:
+    build:
+      context: .
+      dockerfile: services/data-collector/Dockerfile
+    container_name: devin-finops-data-collector
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+      - COLLECTOR_SESSIONS_POLLING_SECONDS=${COLLECTOR_SESSIONS_POLLING_SECONDS:-5}
+      - COLLECTOR_METRICS_POLLING_SECONDS=${COLLECTOR_METRICS_POLLING_SECONDS:-30}
+      - COLLECTOR_BILLING_POLLING_SECONDS=${COLLECTOR_BILLING_POLLING_SECONDS:-60}
+      - COLLECTOR_ADMIN_POLLING_SECONDS=${COLLECTOR_ADMIN_POLLING_SECONDS:-300}
+    volumes:
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- WebSocket Service (subscribes to Redis, broadcasts to clients) ---
+  websocket-service:
+    build:
+      context: .
+      dockerfile: services/websocket-service/Dockerfile
+    container_name: devin-finops-websocket-service
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+      data-collector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Frontend (Angular + Nginx) ---
   frontend:
     build:
       context: frontend
@@ -48,9 +112,9 @@ services:
     ports:
       - "4200:80"
     depends_on:
-      backend:
+      api-gateway:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  backend-data:
+  redis-data:

@@ -110,7 +110,9 @@ main() {
   check_prerequisites
 
   AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-  BACKEND_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/backend"
+  API_GATEWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/api-gateway"
+  DATA_COLLECTOR_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/data-collector"
+  WEBSOCKET_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/websocket-service"
   FRONTEND_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/frontend"
 
   # Step 1: Deploy CloudFormation stack (creates ECR repos, ECS cluster, etc.)
@@ -121,7 +123,9 @@ main() {
     --stack-name "${STACK_NAME}" \
     --parameter-overrides \
       EnvironmentName="${ENVIRONMENT_NAME}" \
-      BackendImageTag="${IMAGE_TAG}" \
+      ApiGatewayImageTag="${IMAGE_TAG}" \
+      DataCollectorImageTag="${IMAGE_TAG}" \
+      WebSocketServiceImageTag="${IMAGE_TAG}" \
       FrontendImageTag="${IMAGE_TAG}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset
@@ -138,10 +142,22 @@ main() {
     # Step 3: Build and push Docker images
     log_info "Step 3/4: Building and pushing Docker images..."
 
-    log_info "  Building backend image..."
+    log_info "  Building api-gateway image..."
     docker build \
-      -t "${BACKEND_ECR_URI}:${IMAGE_TAG}" \
-      -f "${PROJECT_ROOT}/backend/Dockerfile" \
+      -t "${API_GATEWAY_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/api-gateway/Dockerfile" \
+      "${PROJECT_ROOT}"
+
+    log_info "  Building data-collector image..."
+    docker build \
+      -t "${DATA_COLLECTOR_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/data-collector/Dockerfile" \
+      "${PROJECT_ROOT}"
+
+    log_info "  Building websocket-service image..."
+    docker build \
+      -t "${WEBSOCKET_SERVICE_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/websocket-service/Dockerfile" \
       "${PROJECT_ROOT}"
 
     log_info "  Building frontend image..."
@@ -150,8 +166,14 @@ main() {
       -f "${PROJECT_ROOT}/frontend/Dockerfile" \
       "${PROJECT_ROOT}/frontend"
 
-    log_info "  Pushing backend image..."
-    docker push "${BACKEND_ECR_URI}:${IMAGE_TAG}"
+    log_info "  Pushing api-gateway image..."
+    docker push "${API_GATEWAY_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing data-collector image..."
+    docker push "${DATA_COLLECTOR_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing websocket-service image..."
+    docker push "${WEBSOCKET_SERVICE_ECR_URI}:${IMAGE_TAG}"
 
     log_info "  Pushing frontend image..."
     docker push "${FRONTEND_ECR_URI}:${IMAGE_TAG}"
@@ -162,7 +184,21 @@ main() {
   aws ecs update-service \
     --region "${AWS_REGION}" \
     --cluster "${ENVIRONMENT_NAME}-cluster" \
-    --service "${ENVIRONMENT_NAME}-backend" \
+    --service "${ENVIRONMENT_NAME}-api-gateway" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-data-collector" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-websocket-service" \
     --force-new-deployment \
     --no-cli-pager > /dev/null
 
