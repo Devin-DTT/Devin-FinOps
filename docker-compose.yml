@@ -147,6 +147,11 @@ services:
       context: .
       dockerfile: services/billing-service/Dockerfile
     container_name: devin-finops-billing-service
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
     environment:
       - SPRING_DATA_REDIS_HOST=redis
     volumes:
