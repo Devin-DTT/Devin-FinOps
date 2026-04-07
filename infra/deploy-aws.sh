@@ -113,6 +113,10 @@ main() {
   API_GATEWAY_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/api-gateway"
   DATA_COLLECTOR_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/data-collector"
   WEBSOCKET_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/websocket-service"
+  SESSIONS_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/sessions-service"
+  BILLING_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/billing-service"
+  METRICS_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/metrics-service"
+  ADMIN_SERVICE_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/admin-service"
   FRONTEND_ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ENVIRONMENT_NAME}/frontend"
 
   # Step 1: Deploy CloudFormation stack (creates ECR repos, ECS cluster, etc.)
@@ -126,6 +130,10 @@ main() {
       ApiGatewayImageTag="${IMAGE_TAG}" \
       DataCollectorImageTag="${IMAGE_TAG}" \
       WebSocketServiceImageTag="${IMAGE_TAG}" \
+      SessionsServiceImageTag="${IMAGE_TAG}" \
+      BillingServiceImageTag="${IMAGE_TAG}" \
+      MetricsServiceImageTag="${IMAGE_TAG}" \
+      AdminServiceImageTag="${IMAGE_TAG}" \
       FrontendImageTag="${IMAGE_TAG}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --no-fail-on-empty-changeset
@@ -160,6 +168,30 @@ main() {
       -f "${PROJECT_ROOT}/services/websocket-service/Dockerfile" \
       "${PROJECT_ROOT}"
 
+    log_info "  Building sessions-service image..."
+    docker build \
+      -t "${SESSIONS_SERVICE_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/sessions-service/Dockerfile" \
+      "${PROJECT_ROOT}"
+
+    log_info "  Building billing-service image..."
+    docker build \
+      -t "${BILLING_SERVICE_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/billing-service/Dockerfile" \
+      "${PROJECT_ROOT}"
+
+    log_info "  Building metrics-service image..."
+    docker build \
+      -t "${METRICS_SERVICE_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/metrics-service/Dockerfile" \
+      "${PROJECT_ROOT}"
+
+    log_info "  Building admin-service image..."
+    docker build \
+      -t "${ADMIN_SERVICE_ECR_URI}:${IMAGE_TAG}" \
+      -f "${PROJECT_ROOT}/services/admin-service/Dockerfile" \
+      "${PROJECT_ROOT}"
+
     log_info "  Building frontend image..."
     docker build \
       -t "${FRONTEND_ECR_URI}:${IMAGE_TAG}" \
@@ -174,6 +206,18 @@ main() {
 
     log_info "  Pushing websocket-service image..."
     docker push "${WEBSOCKET_SERVICE_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing sessions-service image..."
+    docker push "${SESSIONS_SERVICE_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing billing-service image..."
+    docker push "${BILLING_SERVICE_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing metrics-service image..."
+    docker push "${METRICS_SERVICE_ECR_URI}:${IMAGE_TAG}"
+
+    log_info "  Pushing admin-service image..."
+    docker push "${ADMIN_SERVICE_ECR_URI}:${IMAGE_TAG}"
 
     log_info "  Pushing frontend image..."
     docker push "${FRONTEND_ECR_URI}:${IMAGE_TAG}"
@@ -199,6 +243,34 @@ main() {
     --region "${AWS_REGION}" \
     --cluster "${ENVIRONMENT_NAME}-cluster" \
     --service "${ENVIRONMENT_NAME}-websocket-service" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-sessions-service" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-billing-service" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-metrics-service" \
+    --force-new-deployment \
+    --no-cli-pager > /dev/null
+
+  aws ecs update-service \
+    --region "${AWS_REGION}" \
+    --cluster "${ENVIRONMENT_NAME}-cluster" \
+    --service "${ENVIRONMENT_NAME}-admin-service" \
     --force-new-deployment \
     --no-cli-pager > /dev/null
 
