@@ -38,7 +38,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - WEBSOCKET_SERVICE_URL=http://websocket-service:8082
+      - WEBSOCKET_SERVICE_URL=ws://websocket-service:8082
       - GATEWAY_JWT_ENABLED=${GATEWAY_JWT_ENABLED:-false}
       - GATEWAY_CORS_ALLOWED_ORIGINS=${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:4200}
     depends_on:

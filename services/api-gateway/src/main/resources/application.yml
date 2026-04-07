@@ -9,7 +9,7 @@ spring:
       routes:
         # WebSocket traffic -> websocket-service
         - id: websocket-service
-          uri: ${WEBSOCKET_SERVICE_URL:http://localhost:8082}
+          uri: ${WEBSOCKET_SERVICE_URL:ws://localhost:8082}
           predicates:
             - Path=/ws/**
         # Sessions API -> sessions-service (Phase 2, routed to websocket-service for now)

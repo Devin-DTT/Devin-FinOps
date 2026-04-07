@@ -664,7 +664,7 @@ Resources:
               Protocol: tcp
           Environment:
             - Name: WEBSOCKET_SERVICE_URL
-              Value: !Sub 'http://websocket-service.${EnvironmentName}.local:8082'
+              Value: !Sub 'ws://websocket-service.${EnvironmentName}.local:8082'
           LogConfiguration:
             LogDriver: awslogs
             Options:
