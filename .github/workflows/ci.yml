@@ -133,5 +133,17 @@ jobs:
       - name: Build websocket-service image
         run: docker build -t devin-finops-websocket-service:ci -f services/websocket-service/Dockerfile .
 
+      - name: Build sessions-service image
+        run: docker build -t devin-finops-sessions-service:ci -f services/sessions-service/Dockerfile .
+
+      - name: Build billing-service image
+        run: docker build -t devin-finops-billing-service:ci -f services/billing-service/Dockerfile .
+
+      - name: Build metrics-service image
+        run: docker build -t devin-finops-metrics-service:ci -f services/metrics-service/Dockerfile .
+
+      - name: Build admin-service image
+        run: docker build -t devin-finops-admin-service:ci -f services/admin-service/Dockerfile .
+
       - name: Build frontend image
         run: docker build -t devin-finops-frontend:ci -f frontend/Dockerfile frontend/

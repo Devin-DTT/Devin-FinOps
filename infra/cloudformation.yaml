@@ -1,10 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Devin FinOps Dashboard - AWS ECS Fargate deployment (Microservices).
-  Creates a VPC with public and private subnets, ECS cluster, Fargate services
-  for api-gateway, data-collector, websocket-service, and frontend,
-  an Application Load Balancer, ElastiCache Redis, ECR repositories,
-  and Secrets Manager entries.
+  Creates a VPC with public and private subnets, ECS cluster, 8 Fargate services
+  (api-gateway, data-collector, websocket-service, sessions-service, billing-service,
+  metrics-service, admin-service, frontend), an Application Load Balancer with
+  optional HTTPS, ElastiCache Redis, Cloud Map service discovery, auto-scaling,
+  ECR repositories, and Secrets Manager entries.
 
 # =============================================================================
 # Parameters
@@ -29,12 +30,13 @@ Parameters:
 
   PrivateSubnet1Cidr:
     Type: String
-    Default: 10.0.10.0/24
+    Default: 10.0.3.0/24
 
   PrivateSubnet2Cidr:
     Type: String
-    Default: 10.0.11.0/24
+    Default: 10.0.4.0/24
 
+  # --- Image tags per service ---
   ApiGatewayImageTag:
     Type: String
     Default: latest
@@ -50,11 +52,32 @@ Parameters:
     Default: latest
     Description: Docker image tag for the websocket-service
 
+  SessionsServiceImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the sessions-service
+
+  BillingServiceImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the billing-service
+
+  MetricsServiceImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the metrics-service
+
+  AdminServiceImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag for the admin-service
+
   FrontendImageTag:
     Type: String
     Default: latest
     Description: Docker image tag for the frontend service
 
+  # --- CPU / Memory per service ---
   ApiGatewayCpu:
     Type: String
     Default: '256'
@@ -85,6 +108,46 @@ Parameters:
     Default: '512'
     AllowedValues: ['512', '1024', '2048', '4096']
 
+  SessionsServiceCpu:
+    Type: String
+    Default: '256'
+    AllowedValues: ['256', '512', '1024', '2048']
+
+  SessionsServiceMemory:
+    Type: String
+    Default: '512'
+    AllowedValues: ['512', '1024', '2048', '4096']
+
+  BillingServiceCpu:
+    Type: String
+    Default: '256'
+    AllowedValues: ['256', '512', '1024', '2048']
+
+  BillingServiceMemory:
+    Type: String
+    Default: '512'
+    AllowedValues: ['512', '1024', '2048', '4096']
+
+  MetricsServiceCpu:
+    Type: String
+    Default: '256'
+    AllowedValues: ['256', '512', '1024', '2048']
+
+  MetricsServiceMemory:
+    Type: String
+    Default: '512'
+    AllowedValues: ['512', '1024', '2048', '4096']
+
+  AdminServiceCpu:
+    Type: String
+    Default: '512'
+    AllowedValues: ['256', '512', '1024', '2048']
+
+  AdminServiceMemory:
+    Type: String
+    Default: '1024'
+    AllowedValues: ['512', '1024', '2048', '4096']
+
   FrontendCpu:
     Type: String
     Default: '256'
@@ -99,14 +162,15 @@ Parameters:
     Type: String
     Default: cache.t3.micro
     Description: ElastiCache Redis node type
+    AllowedValues: ['cache.t3.micro', 'cache.t3.small', 'cache.t3.medium']
 
-  CertificateArn:
+  ACMCertificateArn:
     Type: String
     Default: ''
-    Description: ACM certificate ARN for HTTPS listener (leave blank to skip HTTPS)
+    Description: ARN of ACM certificate for HTTPS. Leave empty to skip HTTPS.
 
 Conditions:
-  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+  HasHTTPS: !Not [!Equals [!Ref ACMCertificateArn, '']]
 
 # =============================================================================
 # Resources
@@ -277,29 +341,31 @@ Resources:
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow traffic from ALB to ECS tasks and inter-service
+      GroupDescription: Allow traffic between ECS tasks and from ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
+        # ALB -> frontend (80)
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
+        # ALB -> api-gateway (8080)
         - IpProtocol: tcp
           FromPort: 8080
-          ToPort: 8082
+          ToPort: 8080
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-ecs-sg'
 
-  # Allow ECS tasks to communicate with each other (service mesh)
-  ECSInternalIngress:
+  # Self-referencing rule for inter-service communication (ports 8080-8086)
+  ECSSecurityGroupSelfIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref ECSSecurityGroup
       IpProtocol: tcp
       FromPort: 8080
-      ToPort: 8082
+      ToPort: 8086
       SourceSecurityGroupId: !Ref ECSSecurityGroup
 
   RedisSecurityGroup:
@@ -322,7 +388,7 @@ Resources:
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
-      Description: Subnet group for Redis cluster
+      Description: Subnets for Redis
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -335,14 +401,14 @@ Resources:
       CacheNodeType: !Ref RedisCacheNodeType
       NumCacheNodes: 1
       VpcSecurityGroupIds:
-        - !Ref RedisSecurityGroup
+        - !GetAtt RedisSecurityGroup.GroupId
       CacheSubnetGroupName: !Ref RedisSubnetGroup
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-redis'
 
   # ---------------------------------------------------------------------------
-  # ECR Repositories
+  # ECR Repositories (8 services)
   # ---------------------------------------------------------------------------
   ApiGatewayECR:
     Type: AWS::ECR::Repository
@@ -390,6 +456,90 @@ Resources:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: !Sub '${EnvironmentName}/websocket-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  SessionsServiceECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/sessions-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  BillingServiceECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/billing-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  MetricsServiceECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/metrics-service'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [{
+              "rulePriority": 1,
+              "description": "Keep last 10 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 10
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  AdminServiceECR:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${EnvironmentName}/admin-service'
       ImageScanningConfiguration:
         ScanOnPush: true
       LifecyclePolicy:
@@ -498,7 +648,7 @@ Resources:
                 Resource: '*'
 
   # ---------------------------------------------------------------------------
-  # CloudWatch Log Groups
+  # CloudWatch Log Groups (8 services)
   # ---------------------------------------------------------------------------
   ApiGatewayLogGroup:
     Type: AWS::Logs::LogGroup
@@ -516,6 +666,30 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/ecs/${EnvironmentName}/websocket-service'
+      RetentionInDays: 30
+
+  SessionsServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}/sessions-service'
+      RetentionInDays: 30
+
+  BillingServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}/billing-service'
+      RetentionInDays: 30
+
+  MetricsServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}/metrics-service'
+      RetentionInDays: 30
+
+  AdminServiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}/admin-service'
       RetentionInDays: 30
 
   FrontendLogGroup:
@@ -539,8 +713,8 @@ Resources:
       SecurityGroups:
         - !Ref ALBSecurityGroup
 
-  # HTTP Listener (port 80)
-  ALBListener:
+  # HTTP Listener (port 80) - redirects to HTTPS when certificate is provided
+  ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ALB
@@ -548,7 +722,7 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - !If
-          - HasCertificate
+          - HasHTTPS
           - Type: redirect
             RedirectConfig:
               Protocol: HTTPS
@@ -558,15 +732,16 @@ Resources:
             TargetGroupArn: !Ref FrontendTargetGroup
 
   # HTTPS Listener (port 443) - conditional on certificate
-  ALBHttpsListener:
+  ALBListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: HasCertificate
+    Condition: HasHTTPS
     Properties:
       LoadBalancerArn: !Ref ALB
       Port: 443
       Protocol: HTTPS
       Certificates:
-        - CertificateArn: !Ref CertificateArn
+        - CertificateArn: !Ref ACMCertificateArn
+      SslPolicy: ELBSecurityPolicy-TLS13-1-2-2021-06
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref FrontendTargetGroup
@@ -577,21 +752,6 @@ Resources:
     Properties:
       Name: !Sub '${EnvironmentName}-gateway-tg'
       Port: 8080
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      TargetType: ip
-      HealthCheckPath: /actuator/health
-      HealthCheckIntervalSeconds: 30
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      Matcher:
-        HttpCode: '200'
-
-  WebSocketTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub '${EnvironmentName}-ws-tg'
-      Port: 8082
       Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: ip
@@ -616,24 +776,24 @@ Resources:
       UnhealthyThresholdCount: 3
 
   # --- Listener Rules ---
-  # Route /ws/* directly to websocket-service
+  # Priority 1: /ws/* -> ApiGatewayTargetGroup
   WebSocketListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
-      ListenerArn: !If [HasCertificate, !Ref ALBHttpsListener, !Ref ALBListener]
+      ListenerArn: !If [HasHTTPS, !Ref ALBListenerHTTPS, !Ref ALBListenerHTTP]
       Priority: 1
       Conditions:
         - Field: path-pattern
           Values: ['/ws/*']
       Actions:
         - Type: forward
-          TargetGroupArn: !Ref WebSocketTargetGroup
+          TargetGroupArn: !Ref ApiGatewayTargetGroup
 
-  # Route /api/* to api-gateway
+  # Priority 2: /api/* -> ApiGatewayTargetGroup
   ApiGatewayListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
-      ListenerArn: !If [HasCertificate, !Ref ALBHttpsListener, !Ref ALBListener]
+      ListenerArn: !If [HasHTTPS, !Ref ALBListenerHTTPS, !Ref ALBListenerHTTP]
       Priority: 2
       Conditions:
         - Field: path-pattern
@@ -643,8 +803,89 @@ Resources:
           TargetGroupArn: !Ref ApiGatewayTargetGroup
 
   # ---------------------------------------------------------------------------
-  # ECS Task Definitions
+  # Service Discovery (AWS Cloud Map)
   # ---------------------------------------------------------------------------
+  ServiceDiscoveryNamespace:
+    Type: AWS::ServiceDiscovery::PrivateDnsNamespace
+    Properties:
+      Name: !Sub '${EnvironmentName}.local'
+      Vpc: !Ref VPC
+
+  ApiGatewayDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: api-gateway
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  DataCollectorDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: data-collector
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  WebSocketServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: websocket-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  SessionsServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: sessions-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  BillingServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: billing-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  MetricsServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: metrics-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  AdminServiceDiscoveryService:
+    Type: AWS::ServiceDiscovery::Service
+    Properties:
+      Name: admin-service
+      NamespaceId: !Ref ServiceDiscoveryNamespace
+      DnsConfig:
+        DnsRecords:
+          - Type: A
+            TTL: 10
+
+  # ---------------------------------------------------------------------------
+  # ECS Task Definitions (8 services)
+  # ---------------------------------------------------------------------------
+
+  # --- api-gateway (port 8080) ---
   ApiGatewayTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -665,6 +906,14 @@ Resources:
           Environment:
             - Name: WEBSOCKET_SERVICE_URL
               Value: !Sub 'ws://websocket-service.${EnvironmentName}.local:8082'
+            - Name: SESSIONS_SERVICE_URL
+              Value: !Sub 'http://sessions-service.${EnvironmentName}.local:8083'
+            - Name: BILLING_SERVICE_URL
+              Value: !Sub 'http://billing-service.${EnvironmentName}.local:8084'
+            - Name: METRICS_SERVICE_URL
+              Value: !Sub 'http://metrics-service.${EnvironmentName}.local:8085'
+            - Name: ADMIN_SERVICE_URL
+              Value: !Sub 'http://admin-service.${EnvironmentName}.local:8086'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -672,6 +921,7 @@ Resources:
               awslogs-region: !Ref 'AWS::Region'
               awslogs-stream-prefix: api-gateway
 
+  # --- data-collector (port 8081, needs secrets) ---
   DataCollectorTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -693,7 +943,7 @@ Resources:
             - Name: SPRING_DATA_REDIS_HOST
               Value: !GetAtt RedisCluster.RedisEndpoint.Address
             - Name: SPRING_DATA_REDIS_PORT
-              Value: !GetAtt RedisCluster.RedisEndpoint.Port
+              Value: '6379'
           Secrets:
             - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
               ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
@@ -708,6 +958,7 @@ Resources:
               awslogs-region: !Ref 'AWS::Region'
               awslogs-stream-prefix: data-collector
 
+  # --- websocket-service (port 8082) ---
   WebSocketServiceTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -729,7 +980,7 @@ Resources:
             - Name: SPRING_DATA_REDIS_HOST
               Value: !GetAtt RedisCluster.RedisEndpoint.Address
             - Name: SPRING_DATA_REDIS_PORT
-              Value: !GetAtt RedisCluster.RedisEndpoint.Port
+              Value: '6379'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -737,6 +988,137 @@ Resources:
               awslogs-region: !Ref 'AWS::Region'
               awslogs-stream-prefix: websocket-service
 
+  # --- sessions-service (port 8083, needs secrets) ---
+  SessionsServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-sessions-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: !Ref SessionsServiceCpu
+      Memory: !Ref SessionsServiceMemory
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: sessions-service
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EnvironmentName}/sessions-service:${SessionsServiceImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8083
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_DATA_REDIS_HOST
+              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+            - Name: SPRING_DATA_REDIS_PORT
+              Value: '6379'
+          Secrets:
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
+            - Name: DEVIN_ORG_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_TOKEN::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref SessionsServiceLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: sessions-service
+
+  # --- billing-service (port 8084) ---
+  BillingServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-billing-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: !Ref BillingServiceCpu
+      Memory: !Ref BillingServiceMemory
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: billing-service
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EnvironmentName}/billing-service:${BillingServiceImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8084
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_DATA_REDIS_HOST
+              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+            - Name: SPRING_DATA_REDIS_PORT
+              Value: '6379'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BillingServiceLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: billing-service
+
+  # --- metrics-service (port 8085) ---
+  MetricsServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-metrics-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: !Ref MetricsServiceCpu
+      Memory: !Ref MetricsServiceMemory
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: metrics-service
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EnvironmentName}/metrics-service:${MetricsServiceImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8085
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_DATA_REDIS_HOST
+              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+            - Name: SPRING_DATA_REDIS_PORT
+              Value: '6379'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MetricsServiceLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: metrics-service
+
+  # --- admin-service (port 8086, needs secrets) ---
+  AdminServiceTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-admin-service'
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      Cpu: !Ref AdminServiceCpu
+      Memory: !Ref AdminServiceMemory
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: admin-service
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EnvironmentName}/admin-service:${AdminServiceImageTag}'
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8086
+              Protocol: tcp
+          Environment:
+            - Name: SPRING_DATA_REDIS_HOST
+              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+            - Name: SPRING_DATA_REDIS_PORT
+              Value: '6379'
+          Secrets:
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
+            - Name: DEVIN_ORG_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_TOKEN::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AdminServiceLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: admin-service
+
+  # --- frontend (port 80) ---
   FrontendTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -762,11 +1144,15 @@ Resources:
               awslogs-stream-prefix: frontend
 
   # ---------------------------------------------------------------------------
-  # ECS Services
+  # ECS Services (8 services)
   # ---------------------------------------------------------------------------
+
+  # --- api-gateway: load-balanced, private subnet ---
   ApiGatewayService:
     Type: AWS::ECS::Service
-    DependsOn: ApiGatewayListenerRule
+    DependsOn:
+      - ApiGatewayListenerRule
+      - WebSocketListenerRule
     Properties:
       ServiceName: !Sub '${EnvironmentName}-api-gateway'
       Cluster: !Ref ECSCluster
@@ -785,8 +1171,11 @@ Resources:
         - ContainerName: api-gateway
           ContainerPort: 8080
           TargetGroupArn: !Ref ApiGatewayTargetGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt ApiGatewayDiscoveryService.Arn
       HealthCheckGracePeriodSeconds: 60
 
+  # --- data-collector: internal only (singleton), private subnet ---
   DataCollectorService:
     Type: AWS::ECS::Service
     Properties:
@@ -803,10 +1192,12 @@ Resources:
             - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref ECSSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt DataCollectorDiscoveryService.Arn
 
+  # --- websocket-service: internal only, private subnet ---
   WebSocketServiceECS:
     Type: AWS::ECS::Service
-    DependsOn: WebSocketListenerRule
     Properties:
       ServiceName: !Sub '${EnvironmentName}-websocket-service'
       Cluster: !Ref ECSCluster
@@ -821,15 +1212,93 @@ Resources:
             - !Ref PrivateSubnet2
           SecurityGroups:
             - !Ref ECSSecurityGroup
-      LoadBalancers:
-        - ContainerName: websocket-service
-          ContainerPort: 8082
-          TargetGroupArn: !Ref WebSocketTargetGroup
-      HealthCheckGracePeriodSeconds: 60
+      ServiceRegistries:
+        - RegistryArn: !GetAtt WebSocketServiceDiscoveryService.Arn
 
+  # --- sessions-service: internal only, private subnet ---
+  SessionsServiceECS:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-sessions-service'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref SessionsServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt SessionsServiceDiscoveryService.Arn
+
+  # --- billing-service: internal only, private subnet ---
+  BillingServiceECS:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-billing-service'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref BillingServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt BillingServiceDiscoveryService.Arn
+
+  # --- metrics-service: internal only, private subnet ---
+  MetricsServiceECS:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-metrics-service'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref MetricsServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt MetricsServiceDiscoveryService.Arn
+
+  # --- admin-service: internal only, private subnet ---
+  AdminServiceECS:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-admin-service'
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref AdminServiceTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref ECSSecurityGroup
+      ServiceRegistries:
+        - RegistryArn: !GetAtt AdminServiceDiscoveryService.Arn
+
+  # --- frontend: load-balanced, public subnet ---
   FrontendService:
     Type: AWS::ECS::Service
-    DependsOn: ALBListener
+    DependsOn: ALBListenerHTTP
     Properties:
       ServiceName: !Sub '${EnvironmentName}-frontend'
       Cluster: !Ref ECSCluster
@@ -852,23 +1321,175 @@ Resources:
   # ---------------------------------------------------------------------------
   # Auto Scaling
   # ---------------------------------------------------------------------------
-  WebSocketScalableTarget:
+
+  # --- api-gateway: 1-3, CPU > 70% ---
+  ApiGatewayScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ApiGatewayService
     Properties:
-      MaxCapacity: 5
+      MaxCapacity: 3
       MinCapacity: 1
-      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-websocket-service'
-      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-api-gateway'
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  ApiGatewayScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-api-gateway-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ApiGatewayScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- websocket-service: 1-4, CPU > 70% ---
+  WebSocketScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
     DependsOn: WebSocketServiceECS
+    Properties:
+      MaxCapacity: 4
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-websocket-service'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
 
   WebSocketScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Sub '${EnvironmentName}-ws-cpu-scaling'
+      PolicyName: !Sub '${EnvironmentName}-websocket-cpu-scaling'
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref WebSocketScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- sessions-service: 1-3, CPU > 70% ---
+  SessionsServiceScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: SessionsServiceECS
+    Properties:
+      MaxCapacity: 3
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-sessions-service'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  SessionsServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-sessions-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref SessionsServiceScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- billing-service: 1-2, CPU > 70% ---
+  BillingServiceScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: BillingServiceECS
+    Properties:
+      MaxCapacity: 2
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-billing-service'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  BillingServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-billing-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref BillingServiceScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- metrics-service: 1-2, CPU > 70% ---
+  MetricsServiceScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: MetricsServiceECS
+    Properties:
+      MaxCapacity: 2
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-metrics-service'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  MetricsServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-metrics-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref MetricsServiceScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- admin-service: 1-3, CPU > 70% ---
+  AdminServiceScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: AdminServiceECS
+    Properties:
+      MaxCapacity: 3
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-admin-service'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  AdminServiceScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-admin-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AdminServiceScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        TargetValue: 70.0
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+
+  # --- frontend: 1-3, CPU > 70% ---
+  FrontendScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: FrontendService
+    Properties:
+      MaxCapacity: 3
+      MinCapacity: 1
+      ResourceId: !Sub 'service/${ECSCluster}/${EnvironmentName}-frontend'
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService'
+
+  FrontendScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub '${EnvironmentName}-frontend-cpu-scaling'
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref FrontendScalableTarget
       TargetTrackingScalingPolicyConfiguration:
         PredefinedMetricSpecification:
           PredefinedMetricType: ECSServiceAverageCPUUtilization
@@ -886,6 +1507,22 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-alb-dns'
 
+  DashboardUrl:
+    Description: URL to access the dashboard
+    Value: !If [HasHTTPS, !Sub 'https://${ALB.DNSName}', !Sub 'http://${ALB.DNSName}']
+
+  RedisEndpoint:
+    Description: Redis cluster endpoint
+    Value: !GetAtt RedisCluster.RedisEndpoint.Address
+
+  ServiceDiscoveryNamespaceName:
+    Description: Cloud Map private DNS namespace
+    Value: !Sub '${EnvironmentName}.local'
+
+  ECSClusterName:
+    Description: ECS cluster name
+    Value: !Ref ECSCluster
+
   ApiGatewayECRUri:
     Description: ECR repository URI for the api-gateway image
     Value: !GetAtt ApiGatewayECR.RepositoryUri
@@ -898,18 +1535,22 @@ Outputs:
     Description: ECR repository URI for the websocket-service image
     Value: !GetAtt WebSocketServiceECR.RepositoryUri
 
+  SessionsServiceECRUri:
+    Description: ECR repository URI for the sessions-service image
+    Value: !GetAtt SessionsServiceECR.RepositoryUri
+
+  BillingServiceECRUri:
+    Description: ECR repository URI for the billing-service image
+    Value: !GetAtt BillingServiceECR.RepositoryUri
+
+  MetricsServiceECRUri:
+    Description: ECR repository URI for the metrics-service image
+    Value: !GetAtt MetricsServiceECR.RepositoryUri
+
+  AdminServiceECRUri:
+    Description: ECR repository URI for the admin-service image
+    Value: !GetAtt AdminServiceECR.RepositoryUri
+
   FrontendECRUri:
     Description: ECR repository URI for the frontend image
     Value: !GetAtt FrontendECR.RepositoryUri
-
-  ECSClusterName:
-    Description: ECS cluster name
-    Value: !Ref ECSCluster
-
-  RedisEndpoint:
-    Description: Redis cluster endpoint
-    Value: !GetAtt RedisCluster.RedisEndpoint.Address
-
-  DashboardUrl:
-    Description: URL to access the dashboard
-    Value: !Sub 'http://${ALB.DNSName}'
