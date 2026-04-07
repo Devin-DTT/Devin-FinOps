@@ -1,0 +1,28 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: admin-service
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+
+admin:
+  redis-key-prefix: "finops:endpoint:"
+  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_TOKEN:}
+  org-token: ${DEVIN_ORG_SERVICE_TOKEN:}
+
+logging:
+  level:
+    com.devin.finops.admin: DEBUG

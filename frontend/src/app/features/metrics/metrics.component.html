@@ -1,0 +1,23 @@
+<div class="tab-content">
+  <!-- Active Users KPIs -->
+  <div class="finops-section-title">Usuarios Activos</div>
+  <div class="kpi-section">
+    <app-kpi-card title="DAU" [value]="metricsState.dauCount()"></app-kpi-card>
+    <app-kpi-card title="WAU" [value]="metricsState.wauCount()"></app-kpi-card>
+    <app-kpi-card title="MAU" [value]="metricsState.mauCount()"></app-kpi-card>
+  </div>
+
+  <!-- Charts Row 1: PRs and Sessions -->
+  <div class="finops-section-title">Actividad</div>
+  <div class="charts-row">
+    <app-chart-card title="Pull Requests por Día" [chartData]="prsChartData" [chartOptions]="prsChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
+  </div>
+
+  <!-- Charts Row 2: Usage and Searches -->
+  <div class="finops-section-title">Uso y Búsquedas</div>
+  <div class="charts-row">
+    <app-chart-card title="Uso a lo largo del tiempo" [chartData]="usageChartData" [chartOptions]="usageChartOptions" chartType="line"></app-chart-card>
+    <app-chart-card title="Búsquedas por Día" [chartData]="searchesChartData" [chartOptions]="searchesChartOptions" chartType="bar"></app-chart-card>
+  </div>
+</div>

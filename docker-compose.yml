@@ -39,10 +39,22 @@ services:
       - "8080:8080"
     environment:
       - WEBSOCKET_SERVICE_URL=ws://websocket-service:8082
+      - SESSIONS_SERVICE_URL=http://sessions-service:8083
+      - BILLING_SERVICE_URL=http://billing-service:8084
+      - METRICS_SERVICE_URL=http://metrics-service:8085
+      - ADMIN_SERVICE_URL=http://admin-service:8086
       - GATEWAY_JWT_ENABLED=${GATEWAY_JWT_ENABLED:-false}
       - GATEWAY_CORS_ALLOWED_ORIGINS=${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:4200}
     depends_on:
       websocket-service:
+        condition: service_healthy
+      sessions-service:
+        condition: service_healthy
+      billing-service:
+        condition: service_healthy
+      metrics-service:
+        condition: service_healthy
+      admin-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
@@ -97,6 +109,105 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Sessions Service (Phase 2: REST API for sessions domain) ---
+  sessions-service:
+    build:
+      context: .
+      dockerfile: services/sessions-service/Dockerfile
+    container_name: devin-finops-sessions-service
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    volumes:
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Billing Service (Phase 2: REST API for billing domain) ---
+  billing-service:
+    build:
+      context: .
+      dockerfile: services/billing-service/Dockerfile
+    container_name: devin-finops-billing-service
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    volumes:
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Metrics Service (Phase 2: REST API for metrics domain) ---
+  metrics-service:
+    build:
+      context: .
+      dockerfile: services/metrics-service/Dockerfile
+    container_name: devin-finops-metrics-service
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    volumes:
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # --- Admin Service (Phase 2: REST API for administration domain) ---
+  admin-service:
+    build:
+      context: .
+      dockerfile: services/admin-service/Dockerfile
+    container_name: devin-finops-admin-service
+    env_file:
+      - path: .env.example
+        required: true
+      - path: .env
+        required: false
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+    volumes:
+      - ./endpoints.yaml:/app/endpoints.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8086/actuator/health"]
       interval: 30s
       timeout: 5s
       retries: 3

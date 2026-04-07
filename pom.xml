@@ -28,6 +28,11 @@
         <module>services/api-gateway</module>
         <module>services/data-collector</module>
         <module>services/websocket-service</module>
+        <!-- Phase 2: Domain REST services -->
+        <module>services/sessions-service</module>
+        <module>services/billing-service</module>
+        <module>services/metrics-service</module>
+        <module>services/admin-service</module>
         <!-- Legacy monolith (deprecated, kept as reference) -->
         <module>backend</module>
     </modules>
