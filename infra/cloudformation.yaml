@@ -1046,6 +1046,9 @@ Resources:
               Value: !GetAtt RedisCluster.RedisEndpoint.Address
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
+          Secrets:
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
           LogConfiguration:
             LogDriver: awslogs
             Options:
