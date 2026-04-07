@@ -7,7 +7,6 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.time.Instant;
@@ -17,7 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -50,9 +48,6 @@ public class PollingService {
 
     private final ScheduledExecutorService scheduler =
             Executors.newScheduledThreadPool(4);
-
-    private final List<Disposable> activeSubscriptions =
-            new CopyOnWriteArrayList<>();
 
     private static final Set<String> METRICS_ENDPOINTS = Set.of(
             "get_dau_metrics",
@@ -118,8 +113,6 @@ public class PollingService {
     @PreDestroy
     void shutdown() {
         scheduler.shutdownNow();
-        activeSubscriptions.forEach(Disposable::dispose);
-        activeSubscriptions.clear();
         log.info("Polling service shut down.");
     }
 
@@ -191,7 +184,7 @@ public class PollingService {
         Flux<String> responseFlux = devinApiClient.get(
                 endpoint, Collections.emptyMap(), queryParams);
 
-        Disposable subscription = responseFlux
+        responseFlux
                 .collectList()
                 .subscribe(
                         dataChunks -> {
@@ -204,7 +197,6 @@ public class PollingService {
                         error -> log.warn("Poll error for endpoint {}: {}",
                                 endpoint.getName(), error.getMessage())
                 );
-        activeSubscriptions.add(subscription);
     }
 
     private void pollOrgEndpoint(EndpointDefinition endpoint,
@@ -224,7 +216,7 @@ public class PollingService {
                 ? endpoint.getName() + "__org_" + currentOrgId
                 : endpoint.getName();
 
-        Disposable subscription = responseFlux
+        responseFlux
                 .collectList()
                 .subscribe(
                         dataChunks -> {
@@ -239,7 +231,6 @@ public class PollingService {
                                 endpoint.getName(), currentOrgId,
                                 error.getMessage())
                 );
-        activeSubscriptions.add(subscription);
     }
 
     private Map<String, String> buildMetricsTimeParams() {
