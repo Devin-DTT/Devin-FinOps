@@ -79,7 +79,7 @@ public class AdminController {
     public ResponseEntity<String> createKnowledge(
             @RequestParam(defaultValue = "default") String orgId,
             @RequestBody Map<String, Object> body) {
-        String result = apiProxy.createEnterpriseKnowledge(body).block();
+        String result = apiProxy.createKnowledge(orgId, body).block();
         return ResponseEntity.ok(result);
     }
 
