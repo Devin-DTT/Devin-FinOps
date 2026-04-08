@@ -32,12 +32,6 @@ variable "node_max_size" {
   default     = 5
 }
 
-variable "node_desired_size" {
-  description = "Desired number of nodes in the node pool"
-  type        = number
-  default     = 3
-}
-
 variable "acr_name" {
   description = "Name of the Azure Container Registry (must be globally unique, alphanumeric only)"
   type        = string
