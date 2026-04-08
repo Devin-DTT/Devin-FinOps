@@ -6,7 +6,9 @@ metadata:
   labels:
     {{- include "finops-common.labels" . | nindent 4 }}
 spec:
+  {{- if not .values.hpa.enabled }}
   replicas: {{ .values.replicaCount | default 1 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "finops-common.selectorLabels" . | nindent 6 }}

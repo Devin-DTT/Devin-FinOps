@@ -164,6 +164,7 @@ metrics-service:
 admin-service:
   image:
     repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/admin-service
+  replicaCount: 2
   env:
     - name: SPRING_DATA_REDIS_HOST
       value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
