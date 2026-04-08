@@ -18,7 +18,7 @@ COPY services/sessions-service/pom.xml ./services/sessions-service/pom.xml
 COPY services/billing-service/pom.xml ./services/billing-service/pom.xml
 COPY services/metrics-service/pom.xml ./services/metrics-service/pom.xml
 COPY services/admin-service/pom.xml ./services/admin-service/pom.xml
-COPY backend/pom.xml ./backend/pom.xml
+
 
 # Download dependencies (cached layer)
 RUN mvn dependency:go-offline -B -pl services/data-collector -am || true
