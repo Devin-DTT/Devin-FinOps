@@ -1,4 +1,5 @@
 redis:
+  fullnameOverride: redis
   architecture: standalone
   auth:
     enabled: false
