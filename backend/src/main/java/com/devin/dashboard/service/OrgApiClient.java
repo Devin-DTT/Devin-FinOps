@@ -18,7 +18,7 @@ import java.util.Optional;
  * the backend will auto-discover organizations via the enterprise {@code list_organizations}
  * endpoint and iterate over each one.</p>
  *
- * <p>The org service user token ({@code DEVIN_ORG_SERVICE_USER_TOKEN}) is also optional.
+ * <p>The org service token ({@code DEVIN_ORG_SERVICE_TOKEN}) is also optional.
  * When not configured, organization-scoped endpoints are skipped and only
  * enterprise-scoped data is collected.</p>
  */
@@ -33,25 +33,18 @@ public class OrgApiClient extends BaseApiClient {
     private final boolean available;
 
     /**
-     * Constructs the organization API client, injecting the org service user token
+     * Constructs the organization API client, injecting the org service token
      * and (optionally) the org ID from environment variables.
      *
-     * <p>Falls back to the legacy {@code DEVIN_ORG_SERVICE_TOKEN} for backward
-     * compatibility.</p>
-     *
-     * @param serviceUserToken the organization service user token (DEVIN_ORG_SERVICE_USER_TOKEN)
-     * @param legacyToken      legacy name (DEVIN_ORG_SERVICE_TOKEN), deprecated
-     * @param orgId            the organization ID (DEVIN_ORG_ID), optional
+     * @param orgToken the organization service token (DEVIN_ORG_SERVICE_TOKEN)
+     * @param orgId    the organization ID (DEVIN_ORG_ID), optional
      */
     public OrgApiClient(
-            @Value("${DEVIN_ORG_SERVICE_USER_TOKEN:}") String serviceUserToken,
-            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String legacyToken,
+            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgToken,
             @Value("${DEVIN_ORG_ID:}") String orgId) {
-        super(sanitizeToken(serviceUserToken, legacyToken));
+        super(sanitizeToken(orgToken));
 
-        String resolvedToken = (serviceUserToken != null && !serviceUserToken.isBlank())
-                ? serviceUserToken : legacyToken;
-        this.available = resolvedToken != null && !resolvedToken.isBlank();
+        this.available = orgToken != null && !orgToken.isBlank();
 
         if (orgId != null && !orgId.isBlank()) {
             this.orgId = Optional.of(orgId);
@@ -67,23 +60,16 @@ public class OrgApiClient extends BaseApiClient {
         return "Organization";
     }
 
-    private static String sanitizeToken(String serviceUserToken, String legacyToken) {
-        String token = (serviceUserToken != null && !serviceUserToken.isBlank())
-                ? serviceUserToken : legacyToken;
+    private static String sanitizeToken(String token) {
         if (token == null || token.isBlank()) {
-            log.warn("DEVIN_ORG_SERVICE_USER_TOKEN is not configured. "
+            log.warn("DEVIN_ORG_SERVICE_TOKEN is not configured. "
                     + "Organization-scoped endpoints will be skipped. "
                     + "Provision an org service user at "
                     + "https://app.devin.ai -> Organization Settings -> Service Users.");
             return "NOT_CONFIGURED";
         }
-        if (serviceUserToken == null || serviceUserToken.isBlank()) {
-            log.warn("Using legacy DEVIN_ORG_SERVICE_TOKEN. "
-                    + "Please migrate to DEVIN_ORG_SERVICE_USER_TOKEN.");
-        }
         if (token.length() < 20) {
-            log.warn("Organization service user token appears too short ({} chars). "
-                    + "Verify that the correct service user token is configured.",
+            log.warn("Organization service token appears too short ({} chars).",
                     token.length());
         }
         return token;

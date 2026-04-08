@@ -38,39 +38,31 @@ class DevinApiClientTest {
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when both tokens are empty")
+    @DisplayName("Constructor throws IllegalStateException when token is empty")
     void constructorThrowsWhenTokensEmpty() {
         assertThrows(IllegalStateException.class,
-                () -> new DevinApiClient("", ""));
+                () -> new DevinApiClient(""));
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when both tokens are null")
+    @DisplayName("Constructor throws IllegalStateException when token is null")
     void constructorThrowsWhenTokensNull() {
         assertThrows(IllegalStateException.class,
-                () -> new DevinApiClient(null, null));
+                () -> new DevinApiClient(null));
     }
 
     @Test
-    @DisplayName("Constructor throws IllegalStateException when tokens are blank")
+    @DisplayName("Constructor throws IllegalStateException when token is blank")
     void constructorThrowsWhenTokensBlank() {
         assertThrows(IllegalStateException.class,
-                () -> new DevinApiClient("   ", "   "));
+                () -> new DevinApiClient("   "));
     }
 
     @Test
-    @DisplayName("Constructor accepts legacy DEVIN_ENTERPRISE_SERVICE_TOKEN as fallback")
-    void constructorAcceptsLegacyToken() {
-        String legacyToken = "legacy-enterprise-token-for-testing-12345";
-        DevinApiClient client = new DevinApiClient("", legacyToken);
-        assertNotNull(client);
-    }
-
-    @Test
-    @DisplayName("Constructor accepts DEVIN_ENTERPRISE_SERVICE_USER_TOKEN as primary")
-    void constructorAcceptsServiceUserToken() {
-        String serviceUserToken = "enterprise-service-user-token-for-testing-12345";
-        DevinApiClient client = new DevinApiClient(serviceUserToken, "");
+    @DisplayName("Constructor accepts DEVIN_ENTERPRISE_SERVICE_TOKEN")
+    void constructorAcceptsToken() {
+        String token = "enterprise-service-user-token-for-testing-12345";
+        DevinApiClient client = new DevinApiClient(token);
         assertNotNull(client);
     }
 
@@ -89,7 +81,7 @@ class DevinApiClientTest {
         }
 
         DevinApiClient client = new DevinApiClient(
-                "test-enterprise-token-1234567890", "");
+                "test-enterprise-token-1234567890");
 
         EndpointDefinition endpoint = EndpointDefinition.builder()
                 .name("list_enterprise_sessions")
@@ -123,7 +115,7 @@ class DevinApiClientTest {
         }
 
         DevinApiClient client = new DevinApiClient(
-                "test-enterprise-token-1234567890", "");
+                "test-enterprise-token-1234567890");
 
         EndpointDefinition endpoint = EndpointDefinition.builder()
                 .name("get_session")

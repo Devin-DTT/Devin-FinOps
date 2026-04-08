@@ -47,7 +47,7 @@ Used for enterprise-scoped endpoints (`/v3/enterprise/...`): sessions metrics, b
 4. Set the token as an environment variable:
 
    ```bash
-   export DEVIN_ENTERPRISE_SERVICE_USER_TOKEN="<token_from_step_3>"
+   export DEVIN_ENTERPRISE_SERVICE_TOKEN="<token_from_step_3>"
    ```
 
 #### 2. Organization Service User
@@ -59,7 +59,7 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 3. Set both as environment variables:
 
    ```bash
-   export DEVIN_ORG_SERVICE_USER_TOKEN="<org_token>"
+   export DEVIN_ORG_SERVICE_TOKEN="<org_token>"
    export DEVIN_ORG_ID="<your_org_id>"
    ```
 
@@ -71,10 +71,8 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 
 | Variable                              | Required | Description                                                    |
 |---------------------------------------|----------|----------------------------------------------------------------|
-| `DEVIN_ENTERPRISE_SERVICE_USER_TOKEN` | Yes      | Bearer token for enterprise-scoped API endpoints               |
-| `DEVIN_ENTERPRISE_SERVICE_TOKEN`      | No       | Legacy alias (deprecated) -- falls back if new name not set    |
-| `DEVIN_ORG_SERVICE_USER_TOKEN`        | No       | Bearer token for organization-scoped API endpoints (skipped if missing) |
-| `DEVIN_ORG_SERVICE_TOKEN`             | No       | Legacy alias (deprecated) -- falls back if new name not set    |
+| `DEVIN_ENTERPRISE_SERVICE_TOKEN`      | Yes      | Bearer token for enterprise-scoped API endpoints               |
+| `DEVIN_ORG_SERVICE_TOKEN`             | No       | Bearer token for organization-scoped API endpoints (skipped if missing) |
 | `DEVIN_ORG_ID`                        | No       | Organization ID (optional -- leave blank for multi-org auto-discovery) |
 | `FINOPS_PRICE_PER_ACU`                | No       | Price per ACU (default: `0.05`)                                |
 | `FINOPS_CURRENCY`                     | No       | Currency code (default: `USD`)                                 |
@@ -110,8 +108,8 @@ The frontend starts on port **4200** and proxies API calls to the backend.
 
 On startup the backend validates that all required tokens and configuration are present:
 
-- `DEVIN_ENTERPRISE_SERVICE_USER_TOKEN` must be set (falls back to legacy `DEVIN_ENTERPRISE_SERVICE_TOKEN` for backward compatibility).
-- `DEVIN_ORG_SERVICE_USER_TOKEN` is optional (falls back to legacy `DEVIN_ORG_SERVICE_TOKEN`; if neither is set, organization-scoped endpoints are skipped gracefully).
+- `DEVIN_ENTERPRISE_SERVICE_TOKEN` must be set.
+- `DEVIN_ORG_SERVICE_TOKEN` is optional (if not set, organization-scoped endpoints are skipped gracefully).
 - `DEVIN_ORG_ID` is optional -- if not set, the system uses multi-org auto-discovery via `list_organizations`.
 
 If the enterprise service user token is missing, the application will fail to start with a descriptive error message.
@@ -177,7 +175,7 @@ aws configure
 # 2. Update secrets (first time only)
 aws secretsmanager put-secret-value \
   --secret-id devin-finops/api-tokens \
-  --secret-string '{"DEVIN_ENTERPRISE_SERVICE_USER_TOKEN":"YOUR_SERVICE_USER_TOKEN","DEVIN_ORG_SERVICE_USER_TOKEN":"YOUR_SERVICE_USER_TOKEN","DEVIN_ORG_ID":""}'
+  --secret-string '{"DEVIN_ENTERPRISE_SERVICE_TOKEN":"YOUR_SERVICE_TOKEN","DEVIN_ORG_SERVICE_TOKEN":"YOUR_SERVICE_TOKEN","DEVIN_ORG_ID":""}'
 
 # 3. Deploy (builds images, pushes to ECR, deploys to ECS)
 ./infra/deploy-aws.sh

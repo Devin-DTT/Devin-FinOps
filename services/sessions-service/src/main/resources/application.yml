@@ -20,8 +20,8 @@ management:
 
 sessions:
   redis-key-prefix: "finops:endpoint:"
-  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_USER_TOKEN:${DEVIN_ENTERPRISE_SERVICE_TOKEN:}}
-  org-token: ${DEVIN_ORG_SERVICE_USER_TOKEN:${DEVIN_ORG_SERVICE_TOKEN:}}
+  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_TOKEN:}
+  org-token: ${DEVIN_ORG_SERVICE_TOKEN:}
 
 logging:
   level:
