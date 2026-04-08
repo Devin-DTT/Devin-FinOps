@@ -10,6 +10,9 @@ import java.util.Optional;
 
 /**
  * Reactive HTTP client for organization-scoped Devin API endpoints.
+ *
+ * <p>Falls back to the legacy {@code DEVIN_ORG_SERVICE_TOKEN} for backward
+ * compatibility.</p>
  */
 @Slf4j
 @Service
@@ -22,11 +25,14 @@ public class OrgApiClient extends BaseApiClient {
     private final boolean available;
 
     public OrgApiClient(
-            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgServiceToken,
+            @Value("${DEVIN_ORG_SERVICE_USER_TOKEN:}") String serviceUserToken,
+            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String legacyToken,
             @Value("${DEVIN_ORG_ID:}") String orgId) {
-        super(sanitizeToken(orgServiceToken));
+        super(sanitizeToken(serviceUserToken, legacyToken));
 
-        this.available = orgServiceToken != null && !orgServiceToken.isBlank();
+        String resolvedToken = (serviceUserToken != null && !serviceUserToken.isBlank())
+                ? serviceUserToken : legacyToken;
+        this.available = resolvedToken != null && !resolvedToken.isBlank();
 
         if (orgId != null && !orgId.isBlank()) {
             this.orgId = Optional.of(orgId);
@@ -42,16 +48,24 @@ public class OrgApiClient extends BaseApiClient {
         return "Organization";
     }
 
-    private static String sanitizeToken(String orgServiceToken) {
-        if (orgServiceToken == null || orgServiceToken.isBlank()) {
-            log.warn("DEVIN_ORG_SERVICE_TOKEN not configured. "
-                    + "Org-scoped endpoints will use enterprise fallback.");
+    private static String sanitizeToken(String serviceUserToken, String legacyToken) {
+        String token = (serviceUserToken != null && !serviceUserToken.isBlank())
+                ? serviceUserToken : legacyToken;
+        if (token == null || token.isBlank()) {
+            log.warn("DEVIN_ORG_SERVICE_USER_TOKEN is not configured. "
+                    + "Organization-scoped endpoints will be skipped. "
+                    + "Provision an org service user at "
+                    + "https://app.devin.ai -> Organization Settings -> Service Users.");
             return "NOT_CONFIGURED";
         }
-        if (orgServiceToken.length() < 20) {
-            log.warn("DEVIN_ORG_SERVICE_TOKEN appears too short ({} chars).",
-                    orgServiceToken.length());
+        if (serviceUserToken == null || serviceUserToken.isBlank()) {
+            log.warn("Using legacy DEVIN_ORG_SERVICE_TOKEN. "
+                    + "Please migrate to DEVIN_ORG_SERVICE_USER_TOKEN.");
         }
-        return orgServiceToken;
+        if (token.length() < 20) {
+            log.warn("Organization service user token appears too short ({} chars).",
+                    token.length());
+        }
+        return token;
     }
 }

@@ -9,8 +9,9 @@
 #
 # Environment variables are loaded automatically:
 #   1. .env.example is always loaded (safe defaults / placeholders).
-#   2. .env (if present) overrides with real tokens.
-# To provide your real tokens, copy .env.example to .env and fill them in.
+#   2. .env (if present) overrides with real service user tokens.
+# To provide your real tokens, copy .env.example to .env and fill in
+# your Devin service user tokens (NOT personal API keys).
 # =============================================================================
 
 services:

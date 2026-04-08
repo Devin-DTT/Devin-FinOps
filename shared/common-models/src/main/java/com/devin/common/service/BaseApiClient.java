@@ -65,13 +65,13 @@ public abstract class BaseApiClient {
                 .bodyToFlux(String.class)
                 .onErrorResume(
                         WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("{} token invalid/expired for {} (HTTP 401)",
+                    log.error("{} service user token invalid/expired for {} (HTTP 401). Re-provision the service user.",
                             getScopeLabel(), endpoint.getName());
                     return Flux.error(ex);
                 })
                 .onErrorResume(
                         WebClientResponseException.Forbidden.class, ex -> {
-                    log.error("{} token lacks permissions for {} (HTTP 403)",
+                    log.error("{} service user token lacks permissions for {} (HTTP 403). Check service user permissions.",
                             getScopeLabel(), endpoint.getName());
                     return Flux.error(ex);
                 })
@@ -107,13 +107,13 @@ public abstract class BaseApiClient {
                 .bodyToMono(String.class)
                 .onErrorResume(
                         WebClientResponseException.Unauthorized.class, ex -> {
-                    log.error("{} token invalid/expired for {} (HTTP 401)",
+                    log.error("{} service user token invalid/expired for {} (HTTP 401). Re-provision the service user.",
                             getScopeLabel(), endpoint.getName());
                     return Mono.error(ex);
                 })
                 .onErrorResume(
                         WebClientResponseException.Forbidden.class, ex -> {
-                    log.error("{} token lacks permissions for {} (HTTP 403)",
+                    log.error("{} service user token lacks permissions for {} (HTTP 403). Check service user permissions.",
                             getScopeLabel(), endpoint.getName());
                     return Mono.error(ex);
                 })

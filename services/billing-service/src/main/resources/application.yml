@@ -20,7 +20,7 @@ management:
 
 billing:
   redis-key-prefix: "finops:endpoint:"
-  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_TOKEN:}
+  enterprise-token: ${DEVIN_ENTERPRISE_SERVICE_USER_TOKEN:${DEVIN_ENTERPRISE_SERVICE_TOKEN:}}
 
 logging:
   level:

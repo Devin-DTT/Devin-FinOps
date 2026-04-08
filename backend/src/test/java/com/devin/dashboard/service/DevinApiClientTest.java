@@ -59,18 +59,18 @@ class DevinApiClientTest {
     }
 
     @Test
-    @DisplayName("Constructor accepts DEVIN_SERVICE_TOKEN as fallback")
-    void constructorAcceptsFallbackToken() {
-        String fallbackToken = "fallback-token-for-testing-12345";
-        DevinApiClient client = new DevinApiClient("", fallbackToken);
+    @DisplayName("Constructor accepts legacy DEVIN_ENTERPRISE_SERVICE_TOKEN as fallback")
+    void constructorAcceptsLegacyToken() {
+        String legacyToken = "legacy-enterprise-token-for-testing-12345";
+        DevinApiClient client = new DevinApiClient("", legacyToken);
         assertNotNull(client);
     }
 
     @Test
-    @DisplayName("Constructor accepts enterprise token as primary")
-    void constructorAcceptsEnterpriseToken() {
-        String enterpriseToken = "enterprise-token-for-testing-12345";
-        DevinApiClient client = new DevinApiClient(enterpriseToken, "");
+    @DisplayName("Constructor accepts DEVIN_ENTERPRISE_SERVICE_USER_TOKEN as primary")
+    void constructorAcceptsServiceUserToken() {
+        String serviceUserToken = "enterprise-service-user-token-for-testing-12345";
+        DevinApiClient client = new DevinApiClient(serviceUserToken, "");
         assertNotNull(client);
     }
 

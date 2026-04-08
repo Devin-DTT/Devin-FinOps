@@ -4,7 +4,7 @@
 # This file is read dynamically by the Java backend to construct API calls.
 # All endpoints use the v3 production API (promoted from v3beta1 in Feb 2026).
 #
-# Authentication: Bearer token via "Authorization: Bearer <API_KEY>" header.
+# Authentication: Bearer token via "Authorization: Bearer <SERVICE_USER_TOKEN>" header.
 # Organization-scoped service users do NOT need {org_id} in the URL (auto-resolved).
 # Enterprise-scoped service users require {org_id} where indicated.
 # =============================================================================
