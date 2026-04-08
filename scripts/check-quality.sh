@@ -33,7 +33,7 @@ echo "---------------------------------------------"
 
 if [ -f "$PROJECT_ROOT/pom.xml" ]; then
     cd "$PROJECT_ROOT"
-    if mvn checkstyle:check spotbugs:check -B -q 2>&1 || true; then
+    if mvn checkstyle:check spotbugs:check -B -q 2>&1; then
         BACKEND_RESULT="PASS"
         echo -e "${GREEN}  Microservices checks PASSED${NC}"
     else
