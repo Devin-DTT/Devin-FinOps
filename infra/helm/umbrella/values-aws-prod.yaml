@@ -1,0 +1,210 @@
+# AWS Production environment overrides
+redis:
+  enabled: false  # Use ElastiCache managed Redis
+
+global:
+  redis:
+    host: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+    port: 6379
+
+api-gateway:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/api-gateway
+  replicaCount: 2
+  env:
+    - name: GATEWAY_JWT_ENABLED
+      value: "true"
+    - name: GATEWAY_CORS_ALLOWED_ORIGINS
+      value: "https://finops.example.com"
+    - name: WEBSOCKET_SERVICE_URL
+      value: "ws://websocket-service:8082"
+    - name: SESSIONS_SERVICE_URL
+      value: "http://sessions-service:8083"
+    - name: BILLING_SERVICE_URL
+      value: "http://billing-service:8084"
+    - name: METRICS_SERVICE_URL
+      value: "http://metrics-service:8085"
+    - name: ADMIN_SERVICE_URL
+      value: "http://admin-service:8086"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  ingress:
+    enabled: true
+    className: nginx
+    host: finops.example.com
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+      nginx.ingress.kubernetes.io/websocket-services: "websocket-service"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    tls:
+      - secretName: finops-tls
+        hosts:
+          - finops.example.com
+
+data-collector:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/data-collector
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+    - name: COLLECTOR_SESSIONS_POLLING_SECONDS
+      value: "5"
+    - name: COLLECTOR_METRICS_POLLING_SECONDS
+      value: "30"
+    - name: COLLECTOR_BILLING_POLLING_SECONDS
+      value: "60"
+    - name: COLLECTOR_ADMIN_POLLING_SECONDS
+      value: "300"
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  externalSecrets:
+    enabled: true
+    storeName: aws-secrets-manager
+    remoteKey: devin-finops/api-tokens
+
+websocket-service:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/websocket-service
+  replicaCount: 2
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+
+sessions-service:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/sessions-service
+  replicaCount: 2
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  externalSecrets:
+    enabled: true
+    storeName: aws-secrets-manager
+    remoteKey: devin-finops/api-tokens
+
+billing-service:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/billing-service
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+  externalSecrets:
+    enabled: true
+    storeName: aws-secrets-manager
+    remoteKey: devin-finops/api-tokens
+
+metrics-service:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/metrics-service
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+
+admin-service:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/admin-service
+  env:
+    - name: SPRING_DATA_REDIS_HOST
+      value: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  externalSecrets:
+    enabled: true
+    storeName: aws-secrets-manager
+    remoteKey: devin-finops/api-tokens
+
+frontend:
+  image:
+    repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/frontend
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5

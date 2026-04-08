@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: endpoints-yaml
+data:
+  endpoints.yaml: |-
+{{ .Files.Get "files/endpoints.yaml" | indent 4 }}

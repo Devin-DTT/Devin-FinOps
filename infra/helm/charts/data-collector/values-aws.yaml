@@ -1,0 +1,11 @@
+image:
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/data-collector
+
+envFrom:
+  - secretRef:
+      name: devin-api-tokens
+
+externalSecrets:
+  enabled: true
+  storeName: aws-secrets-manager
+  remoteKey: devin-finops/api-tokens

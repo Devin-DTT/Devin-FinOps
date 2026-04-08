@@ -1,0 +1,8 @@
+# In production, disable in-cluster Redis and use AWS ElastiCache
+redis:
+  enabled: false
+
+global:
+  redis:
+    host: "my-redis-cluster.xxxxx.cache.amazonaws.com"
+    port: 6379

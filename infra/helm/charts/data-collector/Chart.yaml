@@ -1,0 +1,9 @@
+apiVersion: v2
+name: data-collector
+type: application
+version: 0.1.0
+description: Devin FinOps Data Collector - polls Devin API and publishes to Redis
+dependencies:
+  - name: finops-common
+    version: "0.1.0"
+    repository: "file://../finops-common"

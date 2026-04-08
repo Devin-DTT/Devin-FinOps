@@ -1,0 +1,9 @@
+apiVersion: v2
+name: frontend
+type: application
+version: 0.1.0
+description: Devin FinOps Frontend - Angular SPA with Nginx
+dependencies:
+  - name: finops-common
+    version: "0.1.0"
+    repository: "file://../finops-common"

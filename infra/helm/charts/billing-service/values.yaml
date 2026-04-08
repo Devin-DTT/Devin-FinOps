@@ -1,0 +1,50 @@
+replicaCount: 1
+
+image:
+  repository: devin-finops-billing-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+containerPort: 8084
+
+healthCheck:
+  path: /actuator/health
+
+service:
+  type: ClusterIP
+
+env:
+  - name: SPRING_DATA_REDIS_HOST
+    value: "redis-master"
+
+envFrom: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilization: 70
+
+volumeMounts:
+  - name: endpoints
+    mountPath: /app/endpoints.yaml
+    subPath: endpoints.yaml
+    readOnly: true
+
+volumes:
+  - name: endpoints
+    configMap:
+      name: endpoints-yaml
+
+externalSecrets:
+  enabled: false
+  storeName: ""
+  remoteKey: ""

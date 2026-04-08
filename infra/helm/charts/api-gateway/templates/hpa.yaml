@@ -1,0 +1,2 @@
+{{- $ctx := dict "name" "api-gateway" "values" .Values "Release" .Release "Chart" .Chart }}
+{{- include "finops-common.hpa" $ctx }}

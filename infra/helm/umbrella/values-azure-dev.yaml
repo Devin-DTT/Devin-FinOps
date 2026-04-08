@@ -1,0 +1,119 @@
+# Azure Development environment overrides
+redis:
+  enabled: true
+
+api-gateway:
+  image:
+    repository: devinfinops.azurecr.io/api-gateway
+  env:
+    - name: GATEWAY_JWT_ENABLED
+      value: "true"
+    - name: GATEWAY_CORS_ALLOWED_ORIGINS
+      value: "https://finops-dev.example.com"
+    - name: WEBSOCKET_SERVICE_URL
+      value: "ws://websocket-service:8082"
+    - name: SESSIONS_SERVICE_URL
+      value: "http://sessions-service:8083"
+    - name: BILLING_SERVICE_URL
+      value: "http://billing-service:8084"
+    - name: METRICS_SERVICE_URL
+      value: "http://metrics-service:8085"
+    - name: ADMIN_SERVICE_URL
+      value: "http://admin-service:8086"
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+  ingress:
+    enabled: true
+    className: nginx
+    host: finops-dev.example.com
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+      nginx.ingress.kubernetes.io/websocket-services: "websocket-service"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    tls:
+      - secretName: finops-tls
+        hosts:
+          - finops-dev.example.com
+
+data-collector:
+  image:
+    repository: devinfinops.azurecr.io/data-collector
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  externalSecrets:
+    enabled: true
+    storeName: azure-key-vault
+    remoteKey: devin-finops-api-tokens
+
+websocket-service:
+  image:
+    repository: devinfinops.azurecr.io/websocket-service
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+
+sessions-service:
+  image:
+    repository: devinfinops.azurecr.io/sessions-service
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+  externalSecrets:
+    enabled: true
+    storeName: azure-key-vault
+    remoteKey: devin-finops-api-tokens
+
+billing-service:
+  image:
+    repository: devinfinops.azurecr.io/billing-service
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 2
+  externalSecrets:
+    enabled: true
+    storeName: azure-key-vault
+    remoteKey: devin-finops-api-tokens
+
+metrics-service:
+  image:
+    repository: devinfinops.azurecr.io/metrics-service
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 2
+
+admin-service:
+  image:
+    repository: devinfinops.azurecr.io/admin-service
+  envFrom:
+    - secretRef:
+        name: devin-api-tokens
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+  externalSecrets:
+    enabled: true
+    storeName: azure-key-vault
+    remoteKey: devin-finops-api-tokens
+
+frontend:
+  image:
+    repository: devinfinops.azurecr.io/frontend
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3

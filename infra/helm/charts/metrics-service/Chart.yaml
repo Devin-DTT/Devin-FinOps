@@ -1,0 +1,9 @@
+apiVersion: v2
+name: metrics-service
+type: application
+version: 0.1.0
+description: Devin FinOps Metrics Service - REST API for metrics domain
+dependencies:
+  - name: finops-common
+    version: "0.1.0"
+    repository: "file://../finops-common"

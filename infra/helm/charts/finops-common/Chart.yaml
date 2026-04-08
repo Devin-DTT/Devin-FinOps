@@ -1,0 +1,5 @@
+apiVersion: v2
+name: finops-common
+type: library
+version: 0.1.0
+description: Shared Helm templates for Devin FinOps microservices
