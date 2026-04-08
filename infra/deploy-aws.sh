@@ -293,11 +293,11 @@ main() {
   log_info "Dashboard URL: http://${ALB_DNS}"
   log_info "=========================================="
   log_info ""
-  log_info "IMPORTANT: Update the Secrets Manager secret with your API tokens:"
+  log_info "IMPORTANT: Update the Secrets Manager secret with your service user tokens:"
   log_info "  aws secretsmanager put-secret-value \\"
   log_info "    --region ${AWS_REGION} \\"
   log_info "    --secret-id ${ENVIRONMENT_NAME}/api-tokens \\"
-  log_info "    --secret-string '{\"DEVIN_ENTERPRISE_SERVICE_TOKEN\":\"YOUR_TOKEN\",\"DEVIN_ORG_SERVICE_TOKEN\":\"YOUR_TOKEN\",\"DEVIN_ORG_ID\":\"\"}'"
+  log_info "    --secret-string '{\"DEVIN_ENTERPRISE_SERVICE_USER_TOKEN\":\"YOUR_SERVICE_USER_TOKEN\",\"DEVIN_ORG_SERVICE_USER_TOKEN\":\"YOUR_SERVICE_USER_TOKEN\",\"DEVIN_ORG_ID\":\"\"}'"
 }
 
 main "$@"

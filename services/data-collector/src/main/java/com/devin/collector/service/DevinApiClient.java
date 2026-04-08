@@ -7,15 +7,18 @@ import org.springframework.stereotype.Service;
 
 /**
  * Reactive HTTP client for enterprise-scoped Devin API endpoints.
+ *
+ * <p>Falls back to the legacy {@code DEVIN_ENTERPRISE_SERVICE_TOKEN} for backward
+ * compatibility, but logs a deprecation warning.</p>
  */
 @Slf4j
 @Service
 public class DevinApiClient extends BaseApiClient {
 
     public DevinApiClient(
-            @Value("${DEVIN_ENTERPRISE_SERVICE_TOKEN:}") String enterpriseToken,
-            @Value("${DEVIN_SERVICE_TOKEN:}") String legacyToken) {
-        super(resolveToken(enterpriseToken, legacyToken));
+            @Value("${DEVIN_ENTERPRISE_SERVICE_USER_TOKEN:}") String serviceUserToken,
+            @Value("${DEVIN_ENTERPRISE_SERVICE_TOKEN:}") String legacyToken) {
+        super(resolveToken(serviceUserToken, legacyToken));
     }
 
     @Override
@@ -23,24 +26,26 @@ public class DevinApiClient extends BaseApiClient {
         return "Enterprise";
     }
 
-    private static String resolveToken(String enterpriseToken,
+    private static String resolveToken(String serviceUserToken,
                                        String legacyToken) {
-        String serviceToken =
-                (enterpriseToken != null && !enterpriseToken.isBlank())
-                ? enterpriseToken : legacyToken;
-        if (serviceToken == null || serviceToken.isBlank()) {
+        String token =
+                (serviceUserToken != null && !serviceUserToken.isBlank())
+                ? serviceUserToken : legacyToken;
+        if (token == null || token.isBlank()) {
             throw new IllegalStateException(
-                    "DEVIN_ENTERPRISE_SERVICE_TOKEN (or DEVIN_SERVICE_TOKEN) "
-                    + "is not configured.");
+                    "DEVIN_ENTERPRISE_SERVICE_USER_TOKEN is not configured. "
+                    + "Provision a Devin enterprise service user at "
+                    + "https://app.devin.ai -> Enterprise Settings -> Service Users "
+                    + "and set its token as DEVIN_ENTERPRISE_SERVICE_USER_TOKEN.");
         }
-        if (enterpriseToken == null || enterpriseToken.isBlank()) {
-            log.warn("DEVIN_ENTERPRISE_SERVICE_TOKEN is not set; "
-                    + "falling back to DEVIN_SERVICE_TOKEN.");
+        if (serviceUserToken == null || serviceUserToken.isBlank()) {
+            log.warn("Using legacy DEVIN_ENTERPRISE_SERVICE_TOKEN. "
+                    + "Please migrate to DEVIN_ENTERPRISE_SERVICE_USER_TOKEN.");
         }
-        if (serviceToken.length() < 20) {
-            log.warn("Enterprise service token appears too short ({} chars).",
-                    serviceToken.length());
+        if (token.length() < 20) {
+            log.warn("Enterprise service user token appears too short ({} chars).",
+                    token.length());
         }
-        return serviceToken;
+        return token;
     }
 }
