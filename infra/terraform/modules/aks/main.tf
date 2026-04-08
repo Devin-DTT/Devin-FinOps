@@ -14,12 +14,15 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   default_node_pool {
     name                 = "default"
-    node_count           = var.node_desired_size
     vm_size              = var.node_vm_size
     min_count            = var.node_min_size
     max_count            = var.node_max_size
     auto_scaling_enabled = true
     vnet_subnet_id       = var.subnet_id
+  }
+
+  lifecycle {
+    ignore_changes = [default_node_pool[0].node_count]
   }
 
   identity {
