@@ -2,7 +2,7 @@
 # =============================================================================
 # check-quality.sh - Code Quality Check Script for Devin-FinOps
 # =============================================================================
-# Runs static analysis and linting tools for both backend and frontend.
+# Runs static analysis and linting tools for microservices and frontend.
 # Exit code: 0 if all checks pass, 1 if any check fails.
 # =============================================================================
 
@@ -28,21 +28,21 @@ echo ""
 # -----------------------------------------------
 # 1. Backend: Maven Checkstyle + SpotBugs
 # -----------------------------------------------
-echo -e "${YELLOW}[1/2] Backend - Checkstyle & SpotBugs${NC}"
+echo -e "${YELLOW}[1/2] Microservices - Checkstyle & SpotBugs${NC}"
 echo "---------------------------------------------"
 
-if [ -f "$PROJECT_ROOT/backend/pom.xml" ]; then
-    cd "$PROJECT_ROOT/backend"
-    if mvn checkstyle:check spotbugs:check -q 2>&1; then
+if [ -f "$PROJECT_ROOT/pom.xml" ]; then
+    cd "$PROJECT_ROOT"
+    if mvn checkstyle:check spotbugs:check -B -q 2>&1; then
         BACKEND_RESULT="PASS"
-        echo -e "${GREEN}  Backend checks PASSED${NC}"
+        echo -e "${GREEN}  Microservices checks PASSED${NC}"
     else
         BACKEND_RESULT="FAIL"
         OVERALL_EXIT=1
-        echo -e "${RED}  Backend checks FAILED${NC}"
+        echo -e "${RED}  Microservices checks FAILED${NC}"
     fi
 else
-    echo "  backend/pom.xml not found, skipping."
+    echo "  Root pom.xml not found, skipping."
 fi
 
 echo ""
@@ -75,7 +75,7 @@ echo ""
 echo "============================================="
 echo "  Quality Check Summary"
 echo "============================================="
-echo -e "  Backend (Checkstyle + SpotBugs): ${BACKEND_RESULT}"
+echo -e "  Microservices (Checkstyle + SpotBugs): ${BACKEND_RESULT}"
 echo -e "  Frontend (ESLint):               ${FRONTEND_RESULT}"
 echo "============================================="
 

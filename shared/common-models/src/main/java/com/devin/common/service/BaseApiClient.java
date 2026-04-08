@@ -10,6 +10,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
@@ -52,7 +54,8 @@ public abstract class BaseApiClient {
         String url = endpoint.buildUrl(pathParams);
         if (queryParams != null && !queryParams.isEmpty()) {
             String qs = queryParams.entrySet().stream()
-                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
+                            + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                     .collect(Collectors.joining("&"));
             url += (url.contains("?") ? "&" : "?") + qs;
         }

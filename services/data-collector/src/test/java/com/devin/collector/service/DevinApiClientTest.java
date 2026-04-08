@@ -1,6 +1,6 @@
-package com.devin.dashboard.service;
+package com.devin.collector.service;
 
-import com.devin.dashboard.model.EndpointDefinition;
+import com.devin.common.model.EndpointDefinition;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
