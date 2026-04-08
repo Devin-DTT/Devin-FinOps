@@ -586,7 +586,7 @@ Resources:
     Properties:
       Name: !Sub '${EnvironmentName}/api-tokens'
       Description: Devin API service user tokens
-      SecretString: '{"DEVIN_ENTERPRISE_SERVICE_USER_TOKEN":"REPLACE_ME","DEVIN_ORG_SERVICE_USER_TOKEN":"REPLACE_ME","DEVIN_ORG_ID":""}'
+      SecretString: '{"DEVIN_ENTERPRISE_SERVICE_TOKEN":"REPLACE_ME","DEVIN_ORG_SERVICE_TOKEN":"REPLACE_ME","DEVIN_ORG_ID":""}'
 
   # ---------------------------------------------------------------------------
   # ECS Cluster
@@ -945,10 +945,10 @@ Resources:
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
           Secrets:
-            - Name: DEVIN_ENTERPRISE_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_USER_TOKEN::'
-            - Name: DEVIN_ORG_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_USER_TOKEN::'
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
+            - Name: DEVIN_ORG_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_TOKEN::'
             - Name: DEVIN_ORG_ID
               ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_ID::'
           LogConfiguration:
@@ -1012,10 +1012,10 @@ Resources:
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
           Secrets:
-            - Name: DEVIN_ENTERPRISE_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_USER_TOKEN::'
-            - Name: DEVIN_ORG_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_USER_TOKEN::'
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
+            - Name: DEVIN_ORG_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_TOKEN::'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1047,8 +1047,8 @@ Resources:
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
           Secrets:
-            - Name: DEVIN_ENTERPRISE_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_USER_TOKEN::'
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1110,10 +1110,10 @@ Resources:
             - Name: SPRING_DATA_REDIS_PORT
               Value: '6379'
           Secrets:
-            - Name: DEVIN_ENTERPRISE_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_USER_TOKEN::'
-            - Name: DEVIN_ORG_SERVICE_USER_TOKEN
-              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_USER_TOKEN::'
+            - Name: DEVIN_ENTERPRISE_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ENTERPRISE_SERVICE_TOKEN::'
+            - Name: DEVIN_ORG_SERVICE_TOKEN
+              ValueFrom: !Sub '${DevinSecrets}:DEVIN_ORG_SERVICE_TOKEN::'
           LogConfiguration:
             LogDriver: awslogs
             Options:

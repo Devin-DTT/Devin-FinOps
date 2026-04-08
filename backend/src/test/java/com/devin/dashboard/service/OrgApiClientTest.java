@@ -39,25 +39,25 @@ class OrgApiClientTest {
     }
 
     @Test
-    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_USER_TOKEN is empty")
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is empty")
     void constructorCreatesUnavailableClientWhenTokenEmpty() {
-        OrgApiClient client = new OrgApiClient("", "", "org-123");
+        OrgApiClient client = new OrgApiClient("", "org-123");
         assertNotNull(client);
         assertFalse(client.isAvailable());
     }
 
     @Test
-    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_USER_TOKEN is null")
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is null")
     void constructorCreatesUnavailableClientWhenTokenNull() {
-        OrgApiClient client = new OrgApiClient(null, null, "org-123");
+        OrgApiClient client = new OrgApiClient(null, "org-123");
         assertNotNull(client);
         assertFalse(client.isAvailable());
     }
 
     @Test
-    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_USER_TOKEN is blank")
+    @DisplayName("Constructor creates unavailable client when DEVIN_ORG_SERVICE_TOKEN is blank")
     void constructorCreatesUnavailableClientWhenTokenBlank() {
-        OrgApiClient client = new OrgApiClient("   ", "   ", "org-123");
+        OrgApiClient client = new OrgApiClient("   ", "org-123");
         assertNotNull(client);
         assertFalse(client.isAvailable());
     }
@@ -66,7 +66,7 @@ class OrgApiClientTest {
     @DisplayName("getOrgId() returns empty when DEVIN_ORG_ID is not configured (multi-org mode)")
     void getOrgIdReturnsEmptyWhenNotConfigured() {
         String token = "valid-org-service-token-1234567890";
-        OrgApiClient client = new OrgApiClient(token, "", "");
+        OrgApiClient client = new OrgApiClient(token, "");
         assertEquals(Optional.empty(), client.getOrgId());
     }
 
@@ -74,7 +74,7 @@ class OrgApiClientTest {
     @DisplayName("getOrgId() returns empty when DEVIN_ORG_ID is null")
     void getOrgIdReturnsEmptyWhenNull() {
         String token = "valid-org-service-token-1234567890";
-        OrgApiClient client = new OrgApiClient(token, "", null);
+        OrgApiClient client = new OrgApiClient(token, null);
         assertEquals(Optional.empty(), client.getOrgId());
     }
 
@@ -82,7 +82,7 @@ class OrgApiClientTest {
     @DisplayName("getOrgId() returns value when DEVIN_ORG_ID is configured")
     void getOrgIdReturnsValueWhenConfigured() {
         String token = "valid-org-service-token-1234567890";
-        OrgApiClient client = new OrgApiClient(token, "", "my-org-123");
+        OrgApiClient client = new OrgApiClient(token, "my-org-123");
         assertEquals(Optional.of("my-org-123"), client.getOrgId());
     }
 
@@ -100,7 +100,7 @@ class OrgApiClientTest {
         }
 
         OrgApiClient client = new OrgApiClient(
-                "valid-org-service-token-1234567890", "", "org-456");
+                "valid-org-service-token-1234567890", "org-456");
 
         EndpointDefinition endpoint = EndpointDefinition.builder()
                 .name("list_sessions")
@@ -127,7 +127,7 @@ class OrgApiClientTest {
     @DisplayName("Constructor creates client successfully with valid token")
     void constructorCreatesClientWithValidToken() {
         OrgApiClient client = new OrgApiClient(
-                "valid-org-service-token-1234567890", "", "org-id-123");
+                "valid-org-service-token-1234567890", "org-id-123");
         assertNotNull(client);
     }
 }

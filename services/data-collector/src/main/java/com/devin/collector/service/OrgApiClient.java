@@ -11,8 +11,7 @@ import java.util.Optional;
 /**
  * Reactive HTTP client for organization-scoped Devin API endpoints.
  *
- * <p>Falls back to the legacy {@code DEVIN_ORG_SERVICE_TOKEN} for backward
- * compatibility.</p>
+ * <p>Requires {@code DEVIN_ORG_SERVICE_TOKEN} to be configured.</p>
  */
 @Slf4j
 @Service
@@ -25,14 +24,11 @@ public class OrgApiClient extends BaseApiClient {
     private final boolean available;
 
     public OrgApiClient(
-            @Value("${DEVIN_ORG_SERVICE_USER_TOKEN:}") String serviceUserToken,
-            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String legacyToken,
+            @Value("${DEVIN_ORG_SERVICE_TOKEN:}") String orgToken,
             @Value("${DEVIN_ORG_ID:}") String orgId) {
-        super(sanitizeToken(serviceUserToken, legacyToken));
+        super(sanitizeToken(orgToken));
 
-        String resolvedToken = (serviceUserToken != null && !serviceUserToken.isBlank())
-                ? serviceUserToken : legacyToken;
-        this.available = resolvedToken != null && !resolvedToken.isBlank();
+        this.available = orgToken != null && !orgToken.isBlank();
 
         if (orgId != null && !orgId.isBlank()) {
             this.orgId = Optional.of(orgId);
@@ -48,22 +44,16 @@ public class OrgApiClient extends BaseApiClient {
         return "Organization";
     }
 
-    private static String sanitizeToken(String serviceUserToken, String legacyToken) {
-        String token = (serviceUserToken != null && !serviceUserToken.isBlank())
-                ? serviceUserToken : legacyToken;
+    private static String sanitizeToken(String token) {
         if (token == null || token.isBlank()) {
-            log.warn("DEVIN_ORG_SERVICE_USER_TOKEN is not configured. "
+            log.warn("DEVIN_ORG_SERVICE_TOKEN is not configured. "
                     + "Organization-scoped endpoints will be skipped. "
                     + "Provision an org service user at "
                     + "https://app.devin.ai -> Organization Settings -> Service Users.");
             return "NOT_CONFIGURED";
         }
-        if (serviceUserToken == null || serviceUserToken.isBlank()) {
-            log.warn("Using legacy DEVIN_ORG_SERVICE_TOKEN. "
-                    + "Please migrate to DEVIN_ORG_SERVICE_USER_TOKEN.");
-        }
         if (token.length() < 20) {
-            log.warn("Organization service user token appears too short ({} chars).",
+            log.warn("Organization service token appears too short ({} chars).",
                     token.length());
         }
         return token;
