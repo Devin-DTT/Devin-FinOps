@@ -1,0 +1,2 @@
+{{- $ctx := dict "name" "websocket-service" "values" .Values "Release" .Release "Chart" .Chart }}
+{{- include "finops-common.service" $ctx }}

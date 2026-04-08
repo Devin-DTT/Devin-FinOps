@@ -1,0 +1,9 @@
+apiVersion: v2
+name: websocket-service
+type: application
+version: 0.1.0
+description: Devin FinOps WebSocket Service - subscribes to Redis and broadcasts to clients
+dependencies:
+  - name: finops-common
+    version: "0.1.0"
+    repository: "file://../finops-common"

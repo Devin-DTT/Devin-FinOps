@@ -1,0 +1,6 @@
+image:
+  repository: devinfinops.azurecr.io/data-collector
+
+envFrom:
+  - secretRef:
+      name: devin-api-tokens

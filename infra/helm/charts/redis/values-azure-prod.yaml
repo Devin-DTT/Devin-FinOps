@@ -1,0 +1,8 @@
+# In production, disable in-cluster Redis and use Azure Cache for Redis
+redis:
+  enabled: false
+
+global:
+  redis:
+    host: "devin-finops.redis.cache.windows.net"
+    port: 6380

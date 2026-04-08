@@ -1,0 +1,9 @@
+apiVersion: v2
+name: redis
+type: application
+version: 0.1.0
+description: Redis for Devin FinOps - shared cache and Pub/Sub
+dependencies:
+  - name: redis
+    version: "19.x.x"
+    repository: "https://charts.bitnami.com/bitnami"

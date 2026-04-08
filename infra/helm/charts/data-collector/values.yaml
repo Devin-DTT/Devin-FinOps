@@ -1,0 +1,53 @@
+replicaCount: 1
+
+image:
+  repository: devin-finops-data-collector
+  tag: latest
+  pullPolicy: IfNotPresent
+
+containerPort: 8081
+
+healthCheck:
+  path: /actuator/health
+
+service:
+  type: ClusterIP
+
+env:
+  - name: SPRING_DATA_REDIS_HOST
+    value: "redis-master"
+  - name: COLLECTOR_SESSIONS_POLLING_SECONDS
+    value: "5"
+  - name: COLLECTOR_METRICS_POLLING_SECONDS
+    value: "30"
+  - name: COLLECTOR_BILLING_POLLING_SECONDS
+    value: "60"
+  - name: COLLECTOR_ADMIN_POLLING_SECONDS
+    value: "300"
+
+envFrom: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 384Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPUUtilization: 70
+
+volumeMounts:
+  - name: endpoints
+    mountPath: /app/endpoints.yaml
+    subPath: endpoints.yaml
+    readOnly: true
+
+volumes:
+  - name: endpoints
+    configMap:
+      name: endpoints-yaml

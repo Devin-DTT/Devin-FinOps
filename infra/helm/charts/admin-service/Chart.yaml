@@ -1,0 +1,9 @@
+apiVersion: v2
+name: admin-service
+type: application
+version: 0.1.0
+description: Devin FinOps Admin Service - REST API for administration domain
+dependencies:
+  - name: finops-common
+    version: "0.1.0"
+    repository: "file://../finops-common"

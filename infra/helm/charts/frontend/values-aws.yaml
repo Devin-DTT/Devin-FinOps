@@ -1,0 +1,7 @@
+image:
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/devin-finops/frontend
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3

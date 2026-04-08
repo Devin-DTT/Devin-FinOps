@@ -1,0 +1,694 @@
+# =============================================================================
+# Devin API v3 - Endpoint Definitions
+# =============================================================================
+# This file is read dynamically by the Java backend to construct API calls.
+# All endpoints use the v3 production API (promoted from v3beta1 in Feb 2026).
+#
+# Authentication: Bearer token via "Authorization: Bearer <API_KEY>" header.
+# Organization-scoped service users do NOT need {org_id} in the URL (auto-resolved).
+# Enterprise-scoped service users require {org_id} where indicated.
+# =============================================================================
+
+base_urls:
+  organizations: "https://api.devin.ai/v3/organizations"
+  enterprise: "https://api.devin.ai/v3/enterprise"
+
+# ---------------------------------------------------------------------------
+# ORGANIZATION-SCOPED ENDPOINTS  (/v3/organizations/{org_id}/...)
+# ---------------------------------------------------------------------------
+endpoints:
+
+  # -------------------------------------------------------------------------
+  # Sessions
+  # -------------------------------------------------------------------------
+  - name: list_sessions
+    scope: organization
+    path: "/{org_id}/sessions"
+    method: GET
+    description: "List all sessions for the organization (supports cursor pagination and filters)"
+    query_params:
+      - name: limit
+        type: integer
+        required: false
+      - name: cursor
+        type: string
+        required: false
+      - name: origins
+        type: string
+        required: false
+        description: "Filter by origin: webapp, slack, teams, api, linear, jira, other"
+
+  - name: create_session
+    scope: organization
+    path: "/{org_id}/sessions"
+    method: POST
+    description: "Create a new Devin session"
+    body_params:
+      - name: prompt
+        type: string
+        required: true
+      - name: create_as_user_id
+        type: string
+        required: false
+        description: "Create session on behalf of a user (requires ImpersonateOrgSessions)"
+      - name: session_secrets
+        type: array
+        required: false
+        description: "Temporary secrets available only within this session"
+
+  - name: get_session
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}"
+    method: GET
+    description: "Get details of a specific session"
+
+  - name: get_session_messages
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/messages"
+    method: GET
+    description: "Retrieve message history for a session"
+
+  - name: send_session_message
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/messages"
+    method: POST
+    description: "Send a message to an active session (auto-resumes if suspended)"
+    body_params:
+      - name: message
+        type: string
+        required: true
+
+  - name: archive_session
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/archive"
+    method: POST
+    description: "Archive a session"
+
+  - name: delete_session
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}"
+    method: DELETE
+    description: "Delete a session"
+
+  - name: terminate_session
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/terminate"
+    method: POST
+    description: "Terminate a running session"
+
+  # -------------------------------------------------------------------------
+  # Session Tags
+  # -------------------------------------------------------------------------
+  - name: list_session_tags
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/tags"
+    method: GET
+    description: "List tags for a specific session"
+
+  - name: update_session_tags
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/tags"
+    method: PUT
+    description: "Update tags for a specific session"
+
+  - name: list_default_session_tags
+    scope: organization
+    path: "/{org_id}/session-tags"
+    method: GET
+    description: "List organization default session tags"
+
+  # -------------------------------------------------------------------------
+  # Session Insights
+  # -------------------------------------------------------------------------
+  - name: get_session_insights
+    scope: organization
+    path: "/{org_id}/sessions/{session_id}/insights"
+    method: GET
+    description: "Get insights/analysis for a specific session"
+
+  # -------------------------------------------------------------------------
+  # Knowledge Notes
+  # -------------------------------------------------------------------------
+  - name: list_knowledge
+    scope: organization
+    path: "/{org_id}/knowledge/notes"
+    method: GET
+    description: "List all knowledge notes for the organization"
+
+  - name: create_knowledge
+    scope: organization
+    path: "/{org_id}/knowledge/notes"
+    method: POST
+    description: "Create a new knowledge note"
+    body_params:
+      - name: content
+        type: string
+        required: true
+      - name: shared_in_org
+        type: boolean
+        required: false
+        description: "If true, knowledge is visible to the entire organization"
+
+  - name: update_knowledge
+    scope: organization
+    path: "/{org_id}/knowledge/notes/{note_id}"
+    method: PUT
+    description: "Update an existing knowledge note"
+
+  - name: delete_knowledge
+    scope: organization
+    path: "/{org_id}/knowledge/notes/{note_id}"
+    method: DELETE
+    description: "Delete a knowledge note"
+
+  # -------------------------------------------------------------------------
+  # Playbooks
+  # -------------------------------------------------------------------------
+  - name: list_playbooks
+    scope: organization
+    path: "/{org_id}/playbooks"
+    method: GET
+    description: "List all playbooks for the organization"
+
+  - name: create_playbook
+    scope: organization
+    path: "/{org_id}/playbooks"
+    method: POST
+    description: "Create a new playbook"
+
+  - name: get_playbook
+    scope: organization
+    path: "/{org_id}/playbooks/{playbook_id}"
+    method: GET
+    description: "Get a specific playbook"
+
+  - name: update_playbook
+    scope: organization
+    path: "/{org_id}/playbooks/{playbook_id}"
+    method: PUT
+    description: "Update an existing playbook"
+
+  - name: delete_playbook
+    scope: organization
+    path: "/{org_id}/playbooks/{playbook_id}"
+    method: DELETE
+    description: "Delete a playbook"
+
+  # -------------------------------------------------------------------------
+  # Secrets
+  # -------------------------------------------------------------------------
+  - name: list_secrets
+    scope: organization
+    path: "/{org_id}/secrets"
+    method: GET
+    description: "List all secrets for the organization"
+    permission: ManageOrgSecrets
+
+  - name: create_secret
+    scope: organization
+    path: "/{org_id}/secrets"
+    method: POST
+    description: "Create a new secret"
+    permission: ManageOrgSecrets
+
+  - name: delete_secret
+    scope: organization
+    path: "/{org_id}/secrets/{secret_id}"
+    method: DELETE
+    description: "Delete a secret"
+    permission: ManageOrgSecrets
+
+  # -------------------------------------------------------------------------
+  # Schedules
+  # -------------------------------------------------------------------------
+  - name: list_schedules
+    scope: organization
+    path: "/{org_id}/schedules"
+    method: GET
+    description: "List all scheduled sessions"
+    permission: ManageOrgSchedules
+
+  - name: create_schedule
+    scope: organization
+    path: "/{org_id}/schedules"
+    method: POST
+    description: "Create a new scheduled session"
+    permission: ManageOrgSchedules
+
+  - name: get_schedule
+    scope: organization
+    path: "/{org_id}/schedules/{schedule_id}"
+    method: GET
+    description: "Get a specific schedule"
+    permission: ManageOrgSchedules
+
+  - name: update_schedule
+    scope: organization
+    path: "/{org_id}/schedules/{schedule_id}"
+    method: PATCH
+    description: "Update a schedule"
+    permission: ManageOrgSchedules
+
+  - name: delete_schedule
+    scope: organization
+    path: "/{org_id}/schedules/{schedule_id}"
+    method: DELETE
+    description: "Delete a schedule"
+    permission: ManageOrgSchedules
+
+  # -------------------------------------------------------------------------
+  # Attachments
+  # -------------------------------------------------------------------------
+  - name: upload_attachment
+    scope: organization
+    path: "/{org_id}/attachments"
+    method: POST
+    description: "Upload an attachment"
+    permission: UseDevinSessions
+
+  - name: download_attachment
+    scope: organization
+    path: "/{org_id}/attachments/{uuid}/{name}"
+    method: GET
+    description: "Download an attachment"
+    permission: ViewOrgSessions
+
+  # -------------------------------------------------------------------------
+  # Audit Logs (Organization)
+  # -------------------------------------------------------------------------
+  - name: list_org_audit_logs
+    scope: organization
+    path: "/{org_id}/audit-logs"
+    method: GET
+    description: "List audit logs for the organization"
+    query_params:
+      - name: order
+        type: string
+        required: false
+        description: "Sort order: asc or desc (default: desc)"
+      - name: cursor
+        type: string
+        required: false
+      - name: limit
+        type: integer
+        required: false
+
+  # ---------------------------------------------------------------------------
+  # ENTERPRISE-SCOPED ENDPOINTS  (/v3/enterprise/...)
+  # ---------------------------------------------------------------------------
+
+  # -------------------------------------------------------------------------
+  # Enterprise Sessions
+  # -------------------------------------------------------------------------
+  - name: list_enterprise_sessions
+    scope: enterprise
+    path: "/sessions"
+    method: GET
+    description: "List all sessions across the enterprise"
+    query_params:
+      - name: limit
+        type: integer
+        required: false
+      - name: cursor
+        type: string
+        required: false
+      - name: origins
+        type: string
+        required: false
+
+  - name: get_enterprise_session
+    scope: enterprise
+    path: "/sessions/{session_id}"
+    method: GET
+    description: "Get details of a specific session (enterprise scope)"
+
+  - name: send_enterprise_session_message
+    scope: enterprise
+    path: "/sessions/{session_id}/messages"
+    method: POST
+    description: "Send a message to a session (enterprise scope)"
+
+  - name: get_enterprise_session_insights
+    scope: enterprise
+    path: "/sessions/{session_id}/insights"
+    method: GET
+    description: "Get session insights (enterprise scope)"
+
+  # -------------------------------------------------------------------------
+  # Enterprise Session Tags
+  # -------------------------------------------------------------------------
+  - name: list_enterprise_session_tags
+    scope: enterprise
+    path: "/organizations/{org_id}/session-tags"
+    method: GET
+    description: "List organization default session tags (enterprise scope)"
+
+  # -------------------------------------------------------------------------
+  # Organizations
+  # -------------------------------------------------------------------------
+  - name: list_organizations
+    scope: enterprise
+    path: "/organizations"
+    method: GET
+    description: "List all organizations in the enterprise"
+
+  # -------------------------------------------------------------------------
+  # Users & Members
+  # -------------------------------------------------------------------------
+  - name: list_users
+    scope: enterprise
+    path: "/members/users"
+    method: GET
+    description: "List all users in the enterprise"
+
+  # -------------------------------------------------------------------------
+  # Roles
+  # -------------------------------------------------------------------------
+  - name: list_roles
+    scope: enterprise
+    path: "/roles"
+    method: GET
+    description: "List all roles in the enterprise"
+
+  # -------------------------------------------------------------------------
+  # IDP Groups
+  # -------------------------------------------------------------------------
+  - name: list_idp_groups
+    scope: enterprise
+    path: "/idp-groups"
+    method: GET
+    description: "List IDP groups registered with the enterprise"
+    permission: ManageAccountMembership
+
+  - name: create_idp_groups
+    scope: enterprise
+    path: "/idp-groups"
+    method: POST
+    description: "Bulk register IDP groups (up to 100)"
+    permission: ManageAccountMembership
+
+  - name: delete_idp_group
+    scope: enterprise
+    path: "/idp-groups/{idp_group_name}"
+    method: DELETE
+    description: "Delete an IDP group"
+    permission: ManageAccountMembership
+
+  # -------------------------------------------------------------------------
+  # Audit Logs (Enterprise)
+  # -------------------------------------------------------------------------
+  - name: list_enterprise_audit_logs
+    scope: enterprise
+    path: "/audit-logs"
+    method: GET
+    description: "List audit logs across the enterprise"
+    query_params:
+      - name: order
+        type: string
+        required: false
+        description: "Sort order: asc or desc (default: desc)"
+      - name: cursor
+        type: string
+        required: false
+      - name: limit
+        type: integer
+        required: false
+
+  - name: list_enterprise_org_audit_logs
+    scope: enterprise
+    path: "/organizations/{org_id}/audit-logs"
+    method: GET
+    description: "List audit logs for a specific organization (enterprise scope)"
+
+  # -------------------------------------------------------------------------
+  # Consumption & Billing
+  # -------------------------------------------------------------------------
+  - name: list_billing_cycles
+    scope: enterprise
+    path: "/consumption/cycles"
+    method: GET
+    description: "List billing cycles"
+
+  - name: get_daily_consumption
+    scope: enterprise
+    path: "/consumption/daily"
+    method: GET
+    description: "Get daily consumption breakdown"
+
+  - name: get_acu_limits
+    scope: enterprise
+    path: "/consumption/acu-limits/devin"
+    method: GET
+    description: "Get ACU limits for Devin sessions"
+    permission: ManageBilling
+
+  - name: set_org_acu_limit
+    scope: enterprise
+    path: "/consumption/acu-limits/devin/organizations/{org_id}"
+    method: PUT
+    description: "Set ACU limit for a specific organization"
+    permission: ManageBilling
+
+  - name: delete_org_acu_limit
+    scope: enterprise
+    path: "/consumption/acu-limits/devin/organizations/{org_id}"
+    method: DELETE
+    description: "Remove ACU limit for a specific organization"
+    permission: ManageBilling
+
+  # -------------------------------------------------------------------------
+  # Metrics
+  # -------------------------------------------------------------------------
+  - name: get_dau_metrics
+    scope: enterprise
+    path: "/metrics/dau"
+    method: GET
+    description: "Get daily active user metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_wau_metrics
+    scope: enterprise
+    path: "/metrics/wau"
+    method: GET
+    description: "Get weekly active user metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_mau_metrics
+    scope: enterprise
+    path: "/metrics/mau"
+    method: GET
+    description: "Get monthly active user metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_active_users_metrics
+    scope: enterprise
+    path: "/metrics/active-users"
+    method: GET
+    description: "Get unique active users for a custom date range"
+    permission: ViewAccountMetrics
+    query_params:
+      - name: org_ids
+        type: string
+        required: false
+      - name: min_sessions
+        type: integer
+        required: false
+      - name: min_searches
+        type: integer
+        required: false
+
+  - name: get_sessions_metrics
+    scope: enterprise
+    path: "/metrics/sessions"
+    method: GET
+    description: "Get session count metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_searches_metrics
+    scope: enterprise
+    path: "/metrics/searches"
+    method: GET
+    description: "Get search count metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_prs_metrics
+    scope: enterprise
+    path: "/metrics/prs"
+    method: GET
+    description: "Get pull request metrics"
+    permission: ViewAccountMetrics
+
+  - name: get_usage_metrics
+    scope: enterprise
+    path: "/metrics/usage"
+    method: GET
+    description: "Get general usage metrics"
+    permission: ViewAccountMetrics
+
+  # -------------------------------------------------------------------------
+  # Git Connections & Permissions
+  # -------------------------------------------------------------------------
+  - name: list_git_connections
+    scope: enterprise
+    path: "/git-connections"
+    method: GET
+    description: "List git connections for the enterprise"
+
+  - name: list_git_permissions
+    scope: enterprise
+    path: "/git-permissions"
+    method: GET
+    description: "List git permissions"
+
+  - name: create_git_permissions
+    scope: enterprise
+    path: "/git-permissions"
+    method: POST
+    description: "Bulk create git permissions (up to 200 per request)"
+
+  - name: delete_git_permission
+    scope: enterprise
+    path: "/git-permissions/{permission_id}"
+    method: DELETE
+    description: "Delete a git permission"
+
+  # -------------------------------------------------------------------------
+  # Hypervisors & Infrastructure
+  # -------------------------------------------------------------------------
+  - name: list_hypervisors
+    scope: enterprise
+    path: "/hypervisors"
+    method: GET
+    description: "List hypervisors (defaults to available status)"
+    query_params:
+      - name: status
+        type: string
+        required: false
+        description: "Filter by status; pass 'all' to retrieve all"
+
+  - name: get_queue_status
+    scope: enterprise
+    path: "/queue"
+    method: GET
+    description: "Get session queue health (normal, elevated, high)"
+    permission: ViewAccountMetrics
+
+  # -------------------------------------------------------------------------
+  # IP Access List
+  # -------------------------------------------------------------------------
+  - name: get_ip_access_list
+    scope: enterprise
+    path: "/ip-access-list"
+    method: GET
+    description: "Get enterprise IP allowlist"
+    permission: ManageEnterpriseSettings
+
+  - name: update_ip_access_list
+    scope: enterprise
+    path: "/ip-access-list"
+    method: PUT
+    description: "Replace the entire IP allowlist (CIDR supported)"
+    permission: ManageEnterpriseSettings
+
+  - name: delete_ip_access_list
+    scope: enterprise
+    path: "/ip-access-list"
+    method: DELETE
+    description: "Delete the IP allowlist"
+    permission: ManageEnterpriseSettings
+
+  # -------------------------------------------------------------------------
+  # Organization Group Limits
+  # -------------------------------------------------------------------------
+  - name: get_org_group_limits
+    scope: enterprise
+    path: "/org-group-limits"
+    method: GET
+    description: "Get organization group limits"
+
+  # -------------------------------------------------------------------------
+  # Enterprise Knowledge Notes
+  # -------------------------------------------------------------------------
+  - name: list_enterprise_knowledge
+    scope: enterprise
+    path: "/knowledge/notes"
+    method: GET
+    description: "List enterprise-wide knowledge notes"
+
+  - name: create_enterprise_knowledge
+    scope: enterprise
+    path: "/knowledge/notes"
+    method: POST
+    description: "Create an enterprise-wide knowledge note"
+
+  # -------------------------------------------------------------------------
+  # Enterprise Playbooks
+  # -------------------------------------------------------------------------
+  - name: list_enterprise_playbooks
+    scope: enterprise
+    path: "/playbooks"
+    method: GET
+    description: "List enterprise-wide playbooks"
+
+  - name: create_enterprise_playbook
+    scope: enterprise
+    path: "/playbooks"
+    method: POST
+    description: "Create an enterprise-wide playbook"
+
+  # ---------------------------------------------------------------------------
+  # BETA ENDPOINTS  (/v3beta1/...)  - Still in beta as of Feb 2026
+  # ---------------------------------------------------------------------------
+
+  # -------------------------------------------------------------------------
+  # Guardrail Violations (Beta)
+  # -------------------------------------------------------------------------
+  - name: list_guardrail_violations
+    scope: enterprise
+    path: "/guardrail-violations"
+    method: GET
+    beta: true
+    base_url_override: "https://api.devin.ai/v3beta1/enterprise"
+    description: "List guardrail violations across the enterprise"
+    permission: ManageEnterpriseSettings
+
+  - name: list_org_guardrail_violations
+    scope: enterprise
+    path: "/organizations/{org_id}/guardrail-violations"
+    method: GET
+    beta: true
+    base_url_override: "https://api.devin.ai/v3beta1/enterprise"
+    description: "List guardrail violations for a specific organization"
+    permission: ManageEnterpriseSettings
+
+  # -------------------------------------------------------------------------
+  # Service User Provisioning (Beta)
+  # -------------------------------------------------------------------------
+  - name: create_enterprise_service_user
+    scope: enterprise
+    path: "/service-users"
+    method: POST
+    beta: true
+    base_url_override: "https://api.devin.ai/v3beta1/enterprise"
+    description: "Provision a new enterprise service user"
+    permission: ManageAccountServiceUsers
+
+  - name: create_org_service_user
+    scope: organization
+    path: "/{org_id}/service-users"
+    method: POST
+    beta: true
+    base_url_override: "https://api.devin.ai/v3beta1/organizations"
+    description: "Provision a new organization service user"
+    permission: ManageOrgServiceUsers
+
+  # -------------------------------------------------------------------------
+  # Repository Indexing (Beta)
+  # -------------------------------------------------------------------------
+  - name: list_indexed_repositories
+    scope: organization
+    path: "/{org_id}/repositories"
+    method: GET
+    beta: true
+    base_url_override: "https://api.devin.ai/v3beta1/organizations"
+    description: "List indexed repositories for the organization"

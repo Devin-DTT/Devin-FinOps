@@ -1,0 +1,11 @@
+image:
+  repository: devinfinops.azurecr.io/admin-service
+
+envFrom:
+  - secretRef:
+      name: devin-api-tokens
+
+hpa:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3

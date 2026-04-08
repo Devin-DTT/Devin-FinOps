@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: devin-finops-frontend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+containerPort: 80
+
+healthCheck:
+  path: /
+
+service:
+  type: ClusterIP
+
+env: []
+
+envFrom: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilization: 70
