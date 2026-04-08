@@ -26,7 +26,7 @@ echo "============================================="
 echo ""
 
 # -----------------------------------------------
-# 1. Backend: Maven Checkstyle + SpotBugs
+# 1. Microservices: Maven Checkstyle + SpotBugs
 # -----------------------------------------------
 echo -e "${YELLOW}[1/2] Microservices - Checkstyle & SpotBugs${NC}"
 echo "---------------------------------------------"
