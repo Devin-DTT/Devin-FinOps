@@ -1,12 +1,10 @@
-package com.devin.dashboard.config;
+package com.devin.common.config;
 
-import com.devin.dashboard.model.EndpointDefinition;
+import com.devin.common.model.EndpointDefinition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -27,10 +25,7 @@ class EndpointLoaderTest {
         loader.init();
 
         List<EndpointDefinition> endpoints = loader.getEndpoints();
-        // endpoints.yaml is on the classpath (src/main/resources or project root copied)
-        // The loader should find some endpoints
         assertNotNull(endpoints);
-        // If endpoints.yaml is not on the classpath, the list will be empty but not null
     }
 
     @Test
@@ -42,7 +37,6 @@ class EndpointLoaderTest {
         List<EndpointDefinition> readEndpoints = loader.getReadEndpoints();
         assertNotNull(readEndpoints);
 
-        // All returned endpoints must have GET method
         for (EndpointDefinition endpoint : readEndpoints) {
             assertEquals("GET", endpoint.getMethod().toUpperCase(),
                     "Expected all read endpoints to have GET method, but found: "
@@ -53,14 +47,7 @@ class EndpointLoaderTest {
     @Test
     @DisplayName("Returns empty list if endpoints.yaml does not exist")
     void returnsEmptyListWhenFileNotFound(@TempDir Path tempDir) {
-        // Change working directory context - the loader looks for endpoints.yaml
-        // in the current directory and classpath. Since we're in a temp dir
-        // and the classpath may have the file, we test via a fresh loader
-        // that we can at least invoke init() without errors.
         EndpointLoader loader = new EndpointLoader();
-
-        // The loader should handle missing files gracefully
-        // Even if the file exists on classpath, we verify no exceptions are thrown
         loader.init();
         assertNotNull(loader.getEndpoints());
     }
@@ -71,8 +58,6 @@ class EndpointLoaderTest {
         EndpointLoader loader = new EndpointLoader();
         loader.init();
 
-        // This test depends on endpoints.yaml being available.
-        // The loader handles missing files gracefully.
         List<EndpointDefinition> endpoints = loader.getEndpoints();
         if (!endpoints.isEmpty()) {
             String firstName = endpoints.get(0).getName();

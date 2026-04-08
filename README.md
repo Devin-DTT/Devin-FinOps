@@ -4,19 +4,21 @@ Full-stack FinOps dashboard for monitoring Devin Enterprise usage, costs, and pr
 
 ## Architecture
 
-- **Backend**: Spring Boot 3 (Java 17) with WebFlux, WebSocket streaming, and reactive API client.
+- **Microservices**: 7 Spring Boot 3 (Java 17) services with WebFlux, WebSocket streaming, and reactive API clients.
 - **Frontend**: Angular 17 single-page application with real-time dashboard.
+- **Cache & Pub/Sub**: Redis 7 for shared state and inter-service messaging.
 
 ## Prerequisites
 
 - Java 17+
 - Maven 3.9+
 - Node.js 18+ and Angular CLI (for the frontend)
+- Docker & Docker Compose (for running the full stack)
 - A **Devin service user token** (see below)
 
 ## Authentication: Devin Service Users
 
-The backend authenticates against the Devin API using **two service user tokens** (Bearer),
+The microservices authenticate against the Devin API using **two service user tokens** (Bearer),
 one for enterprise-scoped endpoints and one for organization-scoped endpoints.
 
 ### Provisioning Service Users
@@ -26,7 +28,7 @@ one for enterprise-scoped endpoints and one for organization-scoped endpoints.
 Used for enterprise-scoped endpoints (`/v3/enterprise/...`): sessions metrics, billing, ACU limits, users, organizations, etc.
 
 1. Log in to https://app.devin.ai with an admin account.
-2. Navigate to **Enterprise Settings → Service Users** and create a new service user.
+2. Navigate to **Enterprise Settings -> Service Users** and create a new service user.
    Alternatively, call the API:
 
    ```bash
@@ -77,22 +79,35 @@ Used for organization-scoped endpoints (`/v3/organizations/{org_id}/...`): sessi
 | `FINOPS_PRICE_PER_ACU`                | No       | Price per ACU (default: `0.05`)                                |
 | `FINOPS_CURRENCY`                     | No       | Currency code (default: `USD`)                                 |
 
-## Running the Backend
+## Running the Application
+
+### Docker Compose (recommended)
 
 ```bash
-cd backend
-
-# First time: create .env from the template and fill in your tokens
-./setup-env.sh
+# 1. Copy and fill in your service user tokens
+cp .env.example .env
 # Edit .env with your actual tokens
 
-# Start the backend (spring-dotenv loads backend/.env automatically)
-mvn spring-boot:run
+# 2. Build and start all services
+docker-compose up --build
+
+# 3. Access the dashboard
+open http://localhost:4200
 ```
 
-> **Note**: The `.env` file must be in the `backend/` directory (where Maven runs). `spring-dotenv` loads it automatically from the working directory.
+### Services Architecture
 
-The backend starts on port **8080** by default.
+| Service | Port | Description |
+|---|---|---|
+| redis | 6379 | Shared cache and Pub/Sub |
+| api-gateway | 8080 | Spring Cloud Gateway - routing, CORS |
+| data-collector | 8081 | Polls Devin API, publishes to Redis |
+| websocket-service | 8082 | Subscribes to Redis, broadcasts via WebSocket |
+| sessions-service | 8083 | REST API for sessions domain |
+| billing-service | 8084 | REST API for billing domain |
+| metrics-service | 8085 | REST API for metrics domain |
+| admin-service | 8086 | REST API for admin domain |
+| frontend | 4200 | Angular SPA served by Nginx |
 
 ## Running the Frontend
 
@@ -102,11 +117,11 @@ npm install
 ng serve
 ```
 
-The frontend starts on port **4200** and proxies API calls to the backend.
+The frontend starts on port **4200** and proxies API calls to the API Gateway.
 
 ## Startup Validation
 
-On startup the backend validates that all required tokens and configuration are present:
+On startup the data-collector validates that all required tokens and configuration are present:
 
 - `DEVIN_ENTERPRISE_SERVICE_TOKEN` must be set.
 - `DEVIN_ORG_SERVICE_TOKEN` is optional (if not set, organization-scoped endpoints are skipped gracefully).
@@ -126,10 +141,10 @@ A warning is logged if any token appears suspiciously short (fewer than 20 chara
 
 ```bash
 # 1. Copy and fill in your service user tokens
-cp backend/.env.example .env
+cp .env.example .env
 # Edit .env with your service user tokens
 
-# 2. Build and start both services
+# 2. Build and start all services
 docker-compose up --build
 
 # 3. Access the dashboard
@@ -139,8 +154,26 @@ open http://localhost:4200
 ### Building Images Individually
 
 ```bash
-# Backend (from project root)
-docker build -t devin-finops-backend -f backend/Dockerfile .
+# API Gateway
+docker build -t devin-finops-api-gateway -f services/api-gateway/Dockerfile .
+
+# Data Collector
+docker build -t devin-finops-data-collector -f services/data-collector/Dockerfile .
+
+# WebSocket Service
+docker build -t devin-finops-websocket-service -f services/websocket-service/Dockerfile .
+
+# Sessions Service
+docker build -t devin-finops-sessions-service -f services/sessions-service/Dockerfile .
+
+# Billing Service
+docker build -t devin-finops-billing-service -f services/billing-service/Dockerfile .
+
+# Metrics Service
+docker build -t devin-finops-metrics-service -f services/metrics-service/Dockerfile .
+
+# Admin Service
+docker build -t devin-finops-admin-service -f services/admin-service/Dockerfile .
 
 # Frontend
 docker build -t devin-finops-frontend -f frontend/Dockerfile frontend/
@@ -148,9 +181,12 @@ docker build -t devin-finops-frontend -f frontend/Dockerfile frontend/
 
 ### Docker Architecture
 
-- **Backend** (`backend/Dockerfile`): Multi-stage build -- Maven 3.9 + JDK 17 for build, Eclipse Temurin JRE 17 Alpine for runtime. Runs as non-root user. Health check via Spring Boot Actuator.
+- **API Gateway** (`services/api-gateway/Dockerfile`): Spring Cloud Gateway for routing, CORS, and load balancing across microservices.
+- **Data Collector** (`services/data-collector/Dockerfile`): Polls Devin API endpoints and publishes results to Redis.
+- **WebSocket Service** (`services/websocket-service/Dockerfile`): Subscribes to Redis Pub/Sub and broadcasts data to connected WebSocket clients.
+- **Sessions / Billing / Metrics / Admin Services**: Domain-specific REST APIs backed by Redis cache.
 - **Frontend** (`frontend/Dockerfile`): Multi-stage build -- Node 18 for Angular build, Nginx 1.25 Alpine for serving. Includes reverse proxy configuration for WebSocket traffic.
-- **Nginx** (`frontend/nginx.conf`): Serves the Angular SPA, reverse-proxies `/ws/` to the backend for WebSocket connections, and `/actuator/` for health checks.
+- **Redis**: Shared cache and Pub/Sub messaging backbone.
 
 ## AWS Deployment (ECS Fargate)
 
@@ -160,8 +196,8 @@ The `infra/cloudformation.yaml` template provisions:
 
 - **VPC** with 2 public subnets across availability zones
 - **ECS Cluster** (Fargate) with Container Insights
-- **Application Load Balancer** with path-based routing (`/ws/*` and `/actuator/*` to backend, everything else to frontend)
-- **ECR Repositories** for backend and frontend images (auto-cleanup keeps last 10 images)
+- **Application Load Balancer** with path-based routing
+- **ECR Repositories** for microservice and frontend images (auto-cleanup keeps last 10 images)
 - **Secrets Manager** for API tokens (injected into ECS tasks as environment variables)
 - **CloudWatch Log Groups** with 30-day retention
 - **IAM Roles** with least-privilege access
@@ -191,9 +227,9 @@ aws secretsmanager put-secret-value \
 
 The `.github/workflows/ci.yml` pipeline runs on every push/PR to `main`:
 
-1. **Backend**: Compile + unit tests (Maven, JDK 17)
+1. **Microservices**: Compile + unit tests (Maven, JDK 17)
 2. **Frontend**: Lint + production build (Node 18, Angular CLI)
-3. **Docker**: Validate both Dockerfiles build successfully
+3. **Docker**: Validate all Dockerfiles build successfully
 
 ## Configuration
 

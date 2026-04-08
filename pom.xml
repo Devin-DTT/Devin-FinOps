@@ -33,8 +33,6 @@
         <module>services/billing-service</module>
         <module>services/metrics-service</module>
         <module>services/admin-service</module>
-        <!-- Legacy monolith (deprecated, kept as reference) -->
-        <module>backend</module>
     </modules>
 
     <dependencyManagement>
