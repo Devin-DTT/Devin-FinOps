@@ -5,3 +5,8 @@ global:
   redis:
     host: redis-master
     port: 6379
+
+externalSecrets:
+  enabled: false
+  storeName: ""
+  remoteKey: ""

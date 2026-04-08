@@ -27,6 +27,9 @@ module "eks" {
   }
 }
 
+# Current AWS region (used in kubeconfig command output)
+data "aws_region" "current" {}
+
 # ECR repositories (one per service)
 resource "aws_ecr_repository" "services" {
   for_each = toset(var.service_names)

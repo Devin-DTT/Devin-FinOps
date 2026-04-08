@@ -27,5 +27,5 @@ output "eso_role_arn" {
 
 output "kubeconfig_command" {
   description = "Command to configure kubectl"
-  value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region $(data.aws_region.current.name)"
+  value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${data.aws_region.current.name}"
 }

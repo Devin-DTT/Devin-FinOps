@@ -43,8 +43,3 @@ volumes:
   - name: endpoints
     configMap:
       name: endpoints-yaml
-
-externalSecrets:
-  enabled: false
-  storeName: ""
-  remoteKey: ""

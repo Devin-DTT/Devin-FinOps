@@ -9,8 +9,3 @@ hpa:
   enabled: true
   minReplicas: 1
   maxReplicas: 3
-
-externalSecrets:
-  enabled: true
-  storeName: azure-key-vault
-  remoteKey: devin-finops-api-tokens
