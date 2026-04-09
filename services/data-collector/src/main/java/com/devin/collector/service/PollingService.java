@@ -44,6 +44,7 @@ public class PollingService {
     private final EndpointLoader endpointLoader;
     private final RedisSnapshotService snapshotService;
     private final OrgDiscoveryService orgDiscoveryService;
+    private final SessionDiscoveryService sessionDiscoveryService;
     private final CollectorProperties properties;
 
     private final ScheduledExecutorService scheduler =
@@ -62,7 +63,22 @@ public class PollingService {
 
     private static final Set<String> SESSION_ENDPOINTS = Set.of(
             "list_sessions",
-            "list_enterprise_sessions"
+            "list_enterprise_sessions",
+            "get_session",
+            "get_session_messages",
+            "list_session_tags",
+            "get_session_insights",
+            "get_enterprise_session",
+            "get_enterprise_session_insights"
+    );
+
+    private static final Set<String> SESSION_DETAIL_ENDPOINTS = Set.of(
+            "get_session",
+            "get_session_messages",
+            "list_session_tags",
+            "get_session_insights",
+            "get_enterprise_session",
+            "get_enterprise_session_insights"
     );
 
     private static final Set<String> BILLING_ENDPOINTS = Set.of(
@@ -78,12 +94,14 @@ public class PollingService {
                           EndpointLoader endpointLoader,
                           RedisSnapshotService snapshotService,
                           OrgDiscoveryService orgDiscoveryService,
+                          SessionDiscoveryService sessionDiscoveryService,
                           CollectorProperties properties) {
         this.devinApiClient = devinApiClient;
         this.orgApiClient = orgApiClient;
         this.endpointLoader = endpointLoader;
         this.snapshotService = snapshotService;
         this.orgDiscoveryService = orgDiscoveryService;
+        this.sessionDiscoveryService = sessionDiscoveryService;
         this.properties = properties;
     }
 
@@ -155,6 +173,17 @@ public class PollingService {
         boolean pollOrgEndpoints = !orgIds.isEmpty()
                 && (orgApiClient.isAvailable() || devinApiClient != null);
 
+        // Refresh session cache before polling session-detail endpoints
+        boolean hasDetailEndpoints = endpoints.stream()
+                .anyMatch(ep -> SESSION_DETAIL_ENDPOINTS.contains(ep.getName()));
+        if (hasDetailEndpoints) {
+            try {
+                sessionDiscoveryService.refreshFromCache();
+            } catch (Exception e) {
+                log.warn("Failed to refresh session cache: {}", e.getMessage());
+            }
+        }
+
         for (EndpointDefinition endpoint : endpoints) {
             try {
                 String scope = endpoint.getScope();
@@ -181,6 +210,75 @@ public class PollingService {
         if (METRICS_ENDPOINTS.contains(endpoint.getName())) {
             queryParams = buildMetricsTimeParams();
         }
+
+        // Enterprise endpoints that contain {org_id} in their path need
+        // per-org iteration, just like pollOrgEndpoint does.
+        if (endpoint.getPath().contains("{org_id}")) {
+            List<String> orgIds = orgDiscoveryService.getCachedOrgIds();
+            if (orgIds.isEmpty()) {
+                log.warn("Enterprise endpoint {} requires org_id but no orgs discovered yet",
+                        endpoint.getName());
+                return;
+            }
+            for (String orgId : orgIds) {
+                Map<String, String> pathParams = Map.of("org_id", orgId);
+                Flux<String> responseFlux = devinApiClient.get(
+                        endpoint, pathParams, queryParams);
+                boolean multiOrg = orgDiscoveryService.isMultiOrg();
+                String cacheKey = multiOrg
+                        ? endpoint.getName() + "__org_" + orgId
+                        : endpoint.getName();
+                final String finalOrgId = orgId;
+                responseFlux
+                        .collectList()
+                        .subscribe(
+                                dataChunks -> {
+                                    String rawData = String.join("", dataChunks);
+                                    snapshotService.cacheEndpointData(cacheKey, rawData);
+                                    snapshotService.publishUpdate(
+                                            endpoint.getName(), rawData, finalOrgId);
+                                },
+                                error -> log.warn(
+                                        "Poll error for endpoint {} (org {}): {}",
+                                        endpoint.getName(), finalOrgId,
+                                        error.getMessage())
+                        );
+            }
+            return;
+        }
+
+        // Enterprise endpoints that contain {session_id} need per-session iteration.
+        if (endpoint.getPath().contains("{session_id}")) {
+            List<String> sessionIds = sessionDiscoveryService.getEnterpriseSessionIds();
+            if (sessionIds.isEmpty()) {
+                log.debug("No cached enterprise session IDs - skipping {}",
+                        endpoint.getName());
+                return;
+            }
+            for (String sessionId : sessionIds) {
+                Map<String, String> pathParams = Map.of("session_id", sessionId);
+                String cacheKey = endpoint.getName() + "__session_" + sessionId;
+                Flux<String> responseFlux = devinApiClient.get(
+                        endpoint, pathParams, queryParams);
+                responseFlux
+                        .collectList()
+                        .subscribe(
+                                dataChunks -> {
+                                    String rawData = String.join("", dataChunks);
+                                    snapshotService.cacheEndpointData(cacheKey, rawData);
+                                    snapshotService.publishUpdate(
+                                            endpoint.getName(), rawData, null);
+                                },
+                                error -> log.warn(
+                                        "Poll error for endpoint {} (session {}): {}",
+                                        endpoint.getName(), sessionId,
+                                        error.getMessage())
+                        );
+            }
+            return;
+        }
+
+        // Existing logic for enterprise endpoints without path variables
         Flux<String> responseFlux = devinApiClient.get(
                 endpoint, Collections.emptyMap(), queryParams);
 
@@ -203,6 +301,26 @@ public class PollingService {
                                  String currentOrgId) {
         Map<String, String> pathParams = new HashMap<>();
         pathParams.put("org_id", currentOrgId);
+
+        // Org endpoints that contain {session_id} need per-session iteration.
+        if (endpoint.getPath().contains("{session_id}")) {
+            List<String> sessionIds = sessionDiscoveryService.getOrgSessionIds(currentOrgId);
+            if (sessionIds.isEmpty()) {
+                log.debug("No cached session IDs for org {} - skipping {}",
+                        currentOrgId, endpoint.getName());
+                return;
+            }
+            boolean multiOrg = orgDiscoveryService.isMultiOrg();
+            for (String sessionId : sessionIds) {
+                Map<String, String> sessionPathParams = new HashMap<>(pathParams);
+                sessionPathParams.put("session_id", sessionId);
+                String cacheKey = multiOrg
+                        ? endpoint.getName() + "__org_" + currentOrgId + "__session_" + sessionId
+                        : endpoint.getName() + "__session_" + sessionId;
+                pollWithParams(endpoint, sessionPathParams, cacheKey, currentOrgId);
+            }
+            return;
+        }
 
         Flux<String> responseFlux;
         if (orgApiClient.isAvailable()) {
@@ -229,6 +347,41 @@ public class PollingService {
                         error -> log.warn(
                                 "Poll error for endpoint {} (org {}): {}",
                                 endpoint.getName(), currentOrgId,
+                                error.getMessage())
+                );
+    }
+
+    /**
+     * Helper to poll an endpoint with specific path params and cache the result.
+     */
+    private void pollWithParams(EndpointDefinition endpoint,
+                                Map<String, String> pathParams,
+                                String cacheKey,
+                                String orgId) {
+        Map<String, String> queryParams = Collections.emptyMap();
+        if (METRICS_ENDPOINTS.contains(endpoint.getName())) {
+            queryParams = buildMetricsTimeParams();
+        }
+
+        Flux<String> responseFlux;
+        if (orgId != null && orgApiClient.isAvailable()) {
+            responseFlux = orgApiClient.get(endpoint, pathParams);
+        } else {
+            responseFlux = devinApiClient.get(endpoint, pathParams, queryParams);
+        }
+
+        responseFlux
+                .collectList()
+                .subscribe(
+                        dataChunks -> {
+                            String rawData = String.join("", dataChunks);
+                            snapshotService.cacheEndpointData(cacheKey, rawData);
+                            snapshotService.publishUpdate(
+                                    endpoint.getName(), rawData, orgId);
+                        },
+                        error -> log.warn(
+                                "Poll error for endpoint {} (cache key {}): {}",
+                                endpoint.getName(), cacheKey,
                                 error.getMessage())
                 );
     }
