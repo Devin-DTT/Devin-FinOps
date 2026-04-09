@@ -7,11 +7,15 @@
 #   docker-compose down              # stop and remove containers
 #   docker-compose logs -f data-collector   # follow data-collector logs
 #
-# Environment variables are loaded automatically:
+# Environment variables (tokens) are resolved in this order:
 #   1. .env.example is always loaded (safe defaults / placeholders).
 #   2. .env (if present) overrides with real service user tokens.
-# To provide your real tokens, copy .env.example to .env and fill in
-# your Devin service user tokens (NOT personal API keys).
+#   3. Host environment variables override both (highest priority).
+#
+# When running inside Devin, tokens are injected automatically via
+# the Secrets feature (host env vars), so no .env file is needed.
+# For local development outside Devin, copy .env.example to .env
+# and fill in your Devin service user tokens.
 # =============================================================================
 
 services:
@@ -79,6 +83,9 @@ services:
         required: false
     environment:
       - SPRING_DATA_REDIS_HOST=redis
+      - DEVIN_ENTERPRISE_SERVICE_TOKEN=${DEVIN_ENTERPRISE_SERVICE_TOKEN:-}
+      - DEVIN_ORG_SERVICE_TOKEN=${DEVIN_ORG_SERVICE_TOKEN:-}
+      - DEVIN_ORG_ID=${DEVIN_ORG_ID:-}
       - COLLECTOR_SESSIONS_POLLING_SECONDS=${COLLECTOR_SESSIONS_POLLING_SECONDS:-5}
       - COLLECTOR_METRICS_POLLING_SECONDS=${COLLECTOR_METRICS_POLLING_SECONDS:-30}
       - COLLECTOR_BILLING_POLLING_SECONDS=${COLLECTOR_BILLING_POLLING_SECONDS:-60}
@@ -130,6 +137,9 @@ services:
         required: false
     environment:
       - SPRING_DATA_REDIS_HOST=redis
+      - DEVIN_ENTERPRISE_SERVICE_TOKEN=${DEVIN_ENTERPRISE_SERVICE_TOKEN:-}
+      - DEVIN_ORG_SERVICE_TOKEN=${DEVIN_ORG_SERVICE_TOKEN:-}
+      - DEVIN_ORG_ID=${DEVIN_ORG_ID:-}
     volumes:
       - ./endpoints.yaml:/app/endpoints.yaml:ro
     depends_on:
@@ -156,6 +166,9 @@ services:
         required: false
     environment:
       - SPRING_DATA_REDIS_HOST=redis
+      - DEVIN_ENTERPRISE_SERVICE_TOKEN=${DEVIN_ENTERPRISE_SERVICE_TOKEN:-}
+      - DEVIN_ORG_SERVICE_TOKEN=${DEVIN_ORG_SERVICE_TOKEN:-}
+      - DEVIN_ORG_ID=${DEVIN_ORG_ID:-}
     volumes:
       - ./endpoints.yaml:/app/endpoints.yaml:ro
     depends_on:
@@ -203,6 +216,9 @@ services:
         required: false
     environment:
       - SPRING_DATA_REDIS_HOST=redis
+      - DEVIN_ENTERPRISE_SERVICE_TOKEN=${DEVIN_ENTERPRISE_SERVICE_TOKEN:-}
+      - DEVIN_ORG_SERVICE_TOKEN=${DEVIN_ORG_SERVICE_TOKEN:-}
+      - DEVIN_ORG_ID=${DEVIN_ORG_ID:-}
     volumes:
       - ./endpoints.yaml:/app/endpoints.yaml:ro
     depends_on:

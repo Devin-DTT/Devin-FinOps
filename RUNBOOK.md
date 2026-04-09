@@ -144,6 +144,25 @@ cd Devin-FinOps
 
 ### 3.2 Configurar variables de entorno
 
+Los tokens se resuelven en este orden de prioridad (mayor a menor):
+
+1. **Variables de entorno del host** (inyectadas automaticamente por Devin Secrets)
+2. **`.env`** (archivo local, si existe)
+3. **`.env.example`** (valores por defecto / placeholders)
+
+#### Opcion A: Usar Devin Secrets (recomendado)
+
+Si ejecutas el dashboard desde Devin, configura los tokens como **Secrets** en la seccion de Secrets de tu organizacion/sesion con estos nombres:
+
+| Secret | Obligatorio | Descripcion |
+|--------|-------------|-------------|
+| `DEVIN_ENTERPRISE_SERVICE_TOKEN` | Si | Token de service user enterprise |
+| `DEVIN_ORG_SERVICE_TOKEN` | No | Token de service user de organizacion |
+
+Docker Compose pasara automaticamente estas variables de entorno del host a los contenedores. No necesitas crear ni editar ningun archivo `.env`.
+
+#### Opcion B: Usar archivo `.env` (desarrollo local fuera de Devin)
+
 El archivo `.env.example` se encuentra en la **raiz del proyecto** (no en `backend/`).
 
 ```bash
@@ -171,7 +190,7 @@ DASHBOARD_POLLING_INTERVAL_SECONDS=5
 DASHBOARD_ORG_DISCOVERY_REFRESH_SECONDS=60
 ```
 
-> **Nota:** Docker Compose carga automaticamente `.env.example` (valores por defecto) y luego `.env` (si existe) para sobrescribir con los tokens reales.
+> **Nota:** Docker Compose carga `.env.example` (defaults), luego `.env` (si existe), y finalmente las variables de entorno del host tienen la maxima prioridad. Si los tokens estan configurados como Devin Secrets, se inyectan automaticamente sin necesidad de `.env`.
 
 ### 3.3 Levantar los servicios
 
