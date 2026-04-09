@@ -32,6 +32,13 @@ spring:
           uri: ${ADMIN_SERVICE_URL:http://localhost:8086}
           predicates:
             - Path=/api/admin/**
+        # Data dump endpoint (debug/development only)
+        - id: data-dump
+          uri: ${DATA_COLLECTOR_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/dump/**
+          filters:
+            - StripPrefix=1
 
 # Actuator - only health endpoint exposed (NOT routed through gateway publicly)
 management:

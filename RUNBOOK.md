@@ -322,6 +322,31 @@ PUBSUB CHANNELS *
 QUIT
 ```
 
+### Volcado de datos en bruto (Raw Data Dump)
+
+Para obtener un JSON con todos los datos en bruto que el data-collector ha extraido de la API de Devin:
+
+```bash
+# Opcion 1: Usando el script (recomendado)
+./scripts/dump-raw-data.sh
+
+# Opcion 2: Usando el endpoint REST via docker
+docker compose exec data-collector wget -qO- http://localhost:8081/dump > raw-endpoint-data.json
+
+# Opcion 3: Usando el endpoint REST via API Gateway (expuesto al host)
+curl -s http://localhost:8080/api/dump | jq '.' > raw-endpoint-data.json
+
+# Opcion 4: Filtrar solo ciertos endpoints
+docker compose exec data-collector wget -qO- "http://localhost:8081/dump?filter=list_sessions*" > sessions-raw.json
+
+# Opcion 5: Usando el script con filtro y ruta personalizada
+./scripts/dump-raw-data.sh --filter "list_sessions*" --output ./sessions-raw.json
+
+# El archivo se genera en la raiz del repositorio
+cat raw-endpoint-data.json | jq '.total_endpoints'
+cat raw-endpoint-data.json | jq '.endpoints | keys'
+```
+
 ### Shell dentro de un contenedor
 
 ```bash
