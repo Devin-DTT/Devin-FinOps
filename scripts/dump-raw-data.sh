@@ -59,7 +59,7 @@ info "Redis container is running."
 # ---------------------------------------------------------------------------
 # Try REST endpoint first (more reliable than parsing redis-cli)
 # ---------------------------------------------------------------------------
-REST_URL="http://localhost:8081/dump"
+REST_URL="http://localhost:8080/api/dump"
 if [ -n "$FILTER" ]; then
   REST_URL="${REST_URL}?filter=${FILTER}"
 fi

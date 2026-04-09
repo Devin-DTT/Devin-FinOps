@@ -61,7 +61,13 @@ public class DataDumpController {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
             log.error("Failed to dump endpoint data: {}", e.getMessage());
-            return "{\"error\": \"" + e.getMessage() + "\"}";
+            ObjectNode errorNode = MAPPER.createObjectNode();
+            errorNode.put("error", e.getMessage());
+            try {
+                return MAPPER.writeValueAsString(errorNode);
+            } catch (Exception ex) {
+                return "{\"error\": \"internal error\"}";
+            }
         }
     }
 }
