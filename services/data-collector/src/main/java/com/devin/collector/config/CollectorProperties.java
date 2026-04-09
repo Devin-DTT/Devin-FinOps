@@ -41,4 +41,7 @@ public class CollectorProperties {
 
     /** Redis key prefix for cached endpoint data. */
     private String redisKeyPrefix = "finops:endpoint:";
+
+    /** Maximum number of sessions to poll for detail endpoints (default: 20). */
+    private int maxSessionDetailPolling = 20;
 }

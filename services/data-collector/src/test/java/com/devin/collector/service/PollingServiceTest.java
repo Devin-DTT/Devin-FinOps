@@ -41,6 +41,9 @@ class PollingServiceTest {
     @Mock
     private OrgDiscoveryService orgDiscoveryService;
 
+    @Mock
+    private SessionDiscoveryService sessionDiscoveryService;
+
     private CollectorProperties properties;
     private PollingService pollingService;
 
@@ -54,7 +57,8 @@ class PollingServiceTest {
 
         pollingService = new PollingService(
                 devinApiClient, orgApiClient, endpointLoader,
-                snapshotService, orgDiscoveryService, properties);
+                snapshotService, orgDiscoveryService,
+                sessionDiscoveryService, properties);
     }
 
     @Test
