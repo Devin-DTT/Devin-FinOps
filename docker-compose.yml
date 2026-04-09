@@ -44,6 +44,7 @@ services:
       - BILLING_SERVICE_URL=http://billing-service:8084
       - METRICS_SERVICE_URL=http://metrics-service:8085
       - ADMIN_SERVICE_URL=http://admin-service:8086
+      - DATA_COLLECTOR_URL=http://data-collector:8081
       - GATEWAY_JWT_ENABLED=${GATEWAY_JWT_ENABLED:-false}
       - GATEWAY_CORS_ALLOWED_ORIGINS=${GATEWAY_CORS_ALLOWED_ORIGINS:-http://localhost:4200}
     depends_on:

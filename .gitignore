@@ -1,3 +1,6 @@
 # Environment variables (tokens, secrets)
 .env
 .envrc
+
+# Raw endpoint data dump (contains real API data, do not commit)
+raw-endpoint-data.json
