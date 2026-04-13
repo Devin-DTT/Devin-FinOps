@@ -97,7 +97,7 @@ open http://localhost:4200
 
 ### Automatic Raw Endpoint Data Dump
 
-When running with `docker-compose up`, the file `raw-endpoint-data.json` is automatically generated in the repository root every 30 seconds with the raw data from all endpoints cached in Redis. No manual scripts or `curl` commands are needed.
+When running with `docker-compose up`, the file `dump/raw-endpoint-data.json` is automatically generated every 30 seconds with the raw data from all endpoints cached in Redis. No manual scripts or `curl` commands are needed.
 
 The dump behavior is configurable via environment variables:
 

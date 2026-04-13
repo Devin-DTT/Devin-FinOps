@@ -94,7 +94,7 @@ services:
       - COLLECTOR_DUMP_INTERVAL_SECONDS=${COLLECTOR_DUMP_INTERVAL_SECONDS:-30}
     volumes:
       - ./endpoints.yaml:/app/endpoints.yaml:ro
-      - .:/app/dump:rw
+      - ./dump:/app/dump:rw
     depends_on:
       redis:
         condition: service_healthy
