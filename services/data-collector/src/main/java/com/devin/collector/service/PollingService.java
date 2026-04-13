@@ -224,7 +224,7 @@ public class PollingService {
                 String cacheKey = multiOrg
                         ? endpoint.getName() + "__org_" + orgId
                         : endpoint.getName();
-                pollWithParams(endpoint, pathParams, queryParams, cacheKey, orgId);
+                pollWithParams(endpoint, pathParams, queryParams, cacheKey, orgId, false);
             }
             return;
         }
@@ -240,14 +240,14 @@ public class PollingService {
             for (String sessionId : sessionIds) {
                 Map<String, String> pathParams = Map.of("session_id", sessionId);
                 String cacheKey = endpoint.getName() + "__session_" + sessionId;
-                pollWithParams(endpoint, pathParams, queryParams, cacheKey, null);
+                pollWithParams(endpoint, pathParams, queryParams, cacheKey, null, false);
             }
             return;
         }
 
         // Enterprise endpoints without path variables
         pollWithParams(endpoint, Collections.emptyMap(), queryParams,
-                endpoint.getName(), null);
+                endpoint.getName(), null, false);
     }
 
     private void pollOrgEndpoint(EndpointDefinition endpoint,
@@ -272,7 +272,7 @@ public class PollingService {
                 String cacheKey = multiOrg
                         ? endpoint.getName() + "__org_" + currentOrgId + "__session_" + sessionId
                         : endpoint.getName() + "__session_" + sessionId;
-                pollWithParams(endpoint, sessionPathParams, queryParams, cacheKey, currentOrgId);
+                pollWithParams(endpoint, sessionPathParams, queryParams, cacheKey, currentOrgId, true);
             }
             return;
         }
@@ -281,19 +281,25 @@ public class PollingService {
         String cacheKey = multiOrg
                 ? endpoint.getName() + "__org_" + currentOrgId
                 : endpoint.getName();
-        pollWithParams(endpoint, pathParams, queryParams, cacheKey, currentOrgId);
+        pollWithParams(endpoint, pathParams, queryParams, cacheKey, currentOrgId, true);
     }
 
     /**
      * Unified helper to poll an endpoint with specific path/query params and cache the result.
+     *
+     * @param useOrgClient if true and orgApiClient is available, use orgApiClient;
+     *                     otherwise always use devinApiClient. This decouples
+     *                     client selection from the orgId value (enterprise endpoints
+     *                     need orgId in the payload but must use devinApiClient).
      */
     private void pollWithParams(EndpointDefinition endpoint,
                                 Map<String, String> pathParams,
                                 Map<String, String> queryParams,
                                 String cacheKey,
-                                String orgId) {
+                                String orgId,
+                                boolean useOrgClient) {
         Flux<String> responseFlux;
-        if (orgId != null && orgApiClient.isAvailable()) {
+        if (useOrgClient && orgApiClient.isAvailable()) {
             responseFlux = orgApiClient.get(endpoint, pathParams);
         } else {
             responseFlux = devinApiClient.get(endpoint, pathParams, queryParams);
