@@ -19,12 +19,14 @@ public class DataDumpController {
 
     private final StringRedisTemplate redisTemplate;
     private final CollectorProperties properties;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public DataDumpController(StringRedisTemplate redisTemplate,
-                              CollectorProperties properties) {
+                              CollectorProperties properties,
+                              ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping(value = "/dump", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -34,20 +36,20 @@ public class DataDumpController {
             String pattern = properties.getRedisKeyPrefix() + (filter != null ? filter : "*");
             Set<String> keys = redisTemplate.keys(pattern);
 
-            ObjectNode root = MAPPER.createObjectNode();
+            ObjectNode root = objectMapper.createObjectNode();
             root.put("generated_at", Instant.now().toString());
             root.put("total_endpoints", keys != null ? keys.size() : 0);
 
-            ObjectNode endpoints = MAPPER.createObjectNode();
+            ObjectNode endpoints = objectMapper.createObjectNode();
             if (keys != null) {
                 for (String key : keys) {
                     String value = redisTemplate.opsForValue().get(key);
                     String endpointName = key.replace(properties.getRedisKeyPrefix(), "");
-                    ObjectNode entry = MAPPER.createObjectNode();
+                    ObjectNode entry = objectMapper.createObjectNode();
                     entry.put("redis_key", key);
                     if (value != null && !value.isEmpty()) {
                         try {
-                            entry.set("raw_data", MAPPER.readTree(value));
+                            entry.set("raw_data", objectMapper.readTree(value));
                         } catch (Exception e) {
                             entry.put("raw_data", value);
                         }
@@ -58,13 +60,13 @@ public class DataDumpController {
                 }
             }
             root.set("endpoints", endpoints);
-            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
+            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
         } catch (Exception e) {
             log.error("Failed to dump endpoint data: {}", e.getMessage());
-            ObjectNode errorNode = MAPPER.createObjectNode();
+            ObjectNode errorNode = objectMapper.createObjectNode();
             errorNode.put("error", e.getMessage());
             try {
-                return MAPPER.writeValueAsString(errorNode);
+                return objectMapper.writeValueAsString(errorNode);
             } catch (Exception ex) {
                 return "{\"error\": \"internal error\"}";
             }

@@ -1,6 +1,7 @@
 package com.devin.collector.service;
 
 import com.devin.collector.config.CollectorProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,7 +45,7 @@ class RedisSnapshotServiceTest {
 
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        service = new RedisSnapshotService(redisTemplate, properties);
+        service = new RedisSnapshotService(redisTemplate, properties, new ObjectMapper());
     }
 
     @Test

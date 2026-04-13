@@ -1,8 +1,9 @@
 package com.devin.collector.service;
 
 import com.devin.collector.config.CollectorProperties;
+import com.devin.common.model.WebSocketPayload;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -23,12 +24,14 @@ public class RedisSnapshotService {
 
     private final StringRedisTemplate redisTemplate;
     private final CollectorProperties properties;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     public RedisSnapshotService(StringRedisTemplate redisTemplate,
-                                CollectorProperties properties) {
+                                CollectorProperties properties,
+                                ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -61,19 +64,14 @@ public class RedisSnapshotService {
     public void publishUpdate(String endpointName, String rawData,
                               String orgId) {
         try {
-            ObjectNode node = OBJECT_MAPPER.createObjectNode();
-            node.put("type", "data");
-            node.put("endpoint", endpointName);
-            node.put("timestamp", System.currentTimeMillis());
-            if (orgId != null && !orgId.isBlank()) {
-                node.put("org_id", orgId);
+            JsonNode dataNode = null;
+            if (rawData != null && !rawData.isEmpty()) {
+                dataNode = objectMapper.readTree(rawData);
             }
-            if (rawData == null || rawData.isEmpty()) {
-                node.putNull("data");
-            } else {
-                node.set("data", OBJECT_MAPPER.readTree(rawData));
-            }
-            String message = OBJECT_MAPPER.writeValueAsString(node);
+            WebSocketPayload payload = new WebSocketPayload(
+                    "data", endpointName, System.currentTimeMillis(),
+                    orgId, dataNode);
+            String message = payload.toJson(objectMapper);
             redisTemplate.convertAndSend(
                     properties.getRedisPubsubChannel(), message);
             log.debug("Published update for endpoint {} to Redis Pub/Sub",

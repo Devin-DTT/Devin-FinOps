@@ -1,13 +1,12 @@
 package com.devin.collector.service;
 
 import com.devin.collector.config.CollectorProperties;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.devin.common.util.JsonResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +28,7 @@ public class SessionDiscoveryService {
     private final StringRedisTemplate redisTemplate;
     private final CollectorProperties properties;
     private final OrgDiscoveryService orgDiscoveryService;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /**
      * Cache: orgId -> list of session_ids.
@@ -39,10 +38,12 @@ public class SessionDiscoveryService {
 
     public SessionDiscoveryService(StringRedisTemplate redisTemplate,
                                    CollectorProperties properties,
-                                   OrgDiscoveryService orgDiscoveryService) {
+                                   OrgDiscoveryService orgDiscoveryService,
+                                   ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
         this.orgDiscoveryService = orgDiscoveryService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -114,29 +115,10 @@ public class SessionDiscoveryService {
      * "session_id" or "id" from each element.
      */
     List<String> extractSessionIds(String rawJson) {
-        List<String> sessionIds = new ArrayList<>();
-        try {
-            JsonNode root = OBJECT_MAPPER.readTree(rawJson);
-            JsonNode itemsNode = root.has("items") ? root.get("items")
-                    : root.has("sessions") ? root.get("sessions")
-                    : root.isArray() ? root : null;
-
-            if (itemsNode != null && itemsNode.isArray()) {
-                for (JsonNode sessionNode : itemsNode) {
-                    JsonNode idNode = sessionNode.has("session_id")
-                            ? sessionNode.get("session_id")
-                            : sessionNode.has("id")
-                            ? sessionNode.get("id") : null;
-                    if (idNode != null && !idNode.asText().isBlank()) {
-                        sessionIds.add(idNode.asText());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to parse session IDs from cached data: {}",
-                    e.getMessage());
-        }
-        return sessionIds;
+        return JsonResponseParser.extractIds(
+                rawJson, objectMapper,
+                List.of("sessions"),
+                "session_id", "id");
     }
 
     /**

@@ -206,10 +206,8 @@ public class PollingService {
     }
 
     private void pollEnterpriseEndpoint(EndpointDefinition endpoint) {
-        Map<String, String> queryParams = Collections.emptyMap();
-        if (METRICS_ENDPOINTS.contains(endpoint.getName())) {
-            queryParams = buildMetricsTimeParams();
-        }
+        Map<String, String> queryParams = METRICS_ENDPOINTS.contains(endpoint.getName())
+                ? buildMetricsTimeParams() : Collections.emptyMap();
 
         // Enterprise endpoints that contain {org_id} in their path need
         // per-org iteration, just like pollOrgEndpoint does.
@@ -220,29 +218,13 @@ public class PollingService {
                         endpoint.getName());
                 return;
             }
+            boolean multiOrg = orgDiscoveryService.isMultiOrg();
             for (String orgId : orgIds) {
                 Map<String, String> pathParams = Map.of("org_id", orgId);
-                Flux<String> responseFlux = devinApiClient.get(
-                        endpoint, pathParams, queryParams);
-                boolean multiOrg = orgDiscoveryService.isMultiOrg();
                 String cacheKey = multiOrg
                         ? endpoint.getName() + "__org_" + orgId
                         : endpoint.getName();
-                final String finalOrgId = orgId;
-                responseFlux
-                        .collectList()
-                        .subscribe(
-                                dataChunks -> {
-                                    String rawData = String.join("", dataChunks);
-                                    snapshotService.cacheEndpointData(cacheKey, rawData);
-                                    snapshotService.publishUpdate(
-                                            endpoint.getName(), rawData, finalOrgId);
-                                },
-                                error -> log.warn(
-                                        "Poll error for endpoint {} (org {}): {}",
-                                        endpoint.getName(), finalOrgId,
-                                        error.getMessage())
-                        );
+                pollWithParams(endpoint, pathParams, queryParams, cacheKey, orgId, false);
             }
             return;
         }
@@ -258,47 +240,20 @@ public class PollingService {
             for (String sessionId : sessionIds) {
                 Map<String, String> pathParams = Map.of("session_id", sessionId);
                 String cacheKey = endpoint.getName() + "__session_" + sessionId;
-                Flux<String> responseFlux = devinApiClient.get(
-                        endpoint, pathParams, queryParams);
-                responseFlux
-                        .collectList()
-                        .subscribe(
-                                dataChunks -> {
-                                    String rawData = String.join("", dataChunks);
-                                    snapshotService.cacheEndpointData(cacheKey, rawData);
-                                    snapshotService.publishUpdate(
-                                            endpoint.getName(), rawData, null);
-                                },
-                                error -> log.warn(
-                                        "Poll error for endpoint {} (session {}): {}",
-                                        endpoint.getName(), sessionId,
-                                        error.getMessage())
-                        );
+                pollWithParams(endpoint, pathParams, queryParams, cacheKey, null, false);
             }
             return;
         }
 
-        // Existing logic for enterprise endpoints without path variables
-        Flux<String> responseFlux = devinApiClient.get(
-                endpoint, Collections.emptyMap(), queryParams);
-
-        responseFlux
-                .collectList()
-                .subscribe(
-                        dataChunks -> {
-                            String rawData = String.join("", dataChunks);
-                            snapshotService.cacheEndpointData(
-                                    endpoint.getName(), rawData);
-                            snapshotService.publishUpdate(
-                                    endpoint.getName(), rawData, null);
-                        },
-                        error -> log.warn("Poll error for endpoint {}: {}",
-                                endpoint.getName(), error.getMessage())
-                );
+        // Enterprise endpoints without path variables
+        pollWithParams(endpoint, Collections.emptyMap(), queryParams,
+                endpoint.getName(), null, false);
     }
 
     private void pollOrgEndpoint(EndpointDefinition endpoint,
                                  String currentOrgId) {
+        Map<String, String> queryParams = METRICS_ENDPOINTS.contains(endpoint.getName())
+                ? buildMetricsTimeParams() : Collections.emptyMap();
         Map<String, String> pathParams = new HashMap<>();
         pathParams.put("org_id", currentOrgId);
 
@@ -317,54 +272,34 @@ public class PollingService {
                 String cacheKey = multiOrg
                         ? endpoint.getName() + "__org_" + currentOrgId + "__session_" + sessionId
                         : endpoint.getName() + "__session_" + sessionId;
-                pollWithParams(endpoint, sessionPathParams, cacheKey, currentOrgId);
+                pollWithParams(endpoint, sessionPathParams, queryParams, cacheKey, currentOrgId, true);
             }
             return;
-        }
-
-        Flux<String> responseFlux;
-        if (orgApiClient.isAvailable()) {
-            responseFlux = orgApiClient.get(endpoint, pathParams);
-        } else {
-            responseFlux = devinApiClient.get(endpoint, pathParams);
         }
 
         boolean multiOrg = orgDiscoveryService.isMultiOrg();
         String cacheKey = multiOrg
                 ? endpoint.getName() + "__org_" + currentOrgId
                 : endpoint.getName();
-
-        responseFlux
-                .collectList()
-                .subscribe(
-                        dataChunks -> {
-                            String rawData = String.join("", dataChunks);
-                            snapshotService.cacheEndpointData(
-                                    cacheKey, rawData);
-                            snapshotService.publishUpdate(
-                                    endpoint.getName(), rawData, currentOrgId);
-                        },
-                        error -> log.warn(
-                                "Poll error for endpoint {} (org {}): {}",
-                                endpoint.getName(), currentOrgId,
-                                error.getMessage())
-                );
+        pollWithParams(endpoint, pathParams, queryParams, cacheKey, currentOrgId, true);
     }
 
     /**
-     * Helper to poll an endpoint with specific path params and cache the result.
+     * Unified helper to poll an endpoint with specific path/query params and cache the result.
+     *
+     * @param useOrgClient if true and orgApiClient is available, use orgApiClient;
+     *                     otherwise always use devinApiClient. This decouples
+     *                     client selection from the orgId value (enterprise endpoints
+     *                     need orgId in the payload but must use devinApiClient).
      */
     private void pollWithParams(EndpointDefinition endpoint,
                                 Map<String, String> pathParams,
+                                Map<String, String> queryParams,
                                 String cacheKey,
-                                String orgId) {
-        Map<String, String> queryParams = Collections.emptyMap();
-        if (METRICS_ENDPOINTS.contains(endpoint.getName())) {
-            queryParams = buildMetricsTimeParams();
-        }
-
+                                String orgId,
+                                boolean useOrgClient) {
         Flux<String> responseFlux;
-        if (orgId != null && orgApiClient.isAvailable()) {
+        if (useOrgClient && orgApiClient.isAvailable()) {
             responseFlux = orgApiClient.get(endpoint, pathParams);
         } else {
             responseFlux = devinApiClient.get(endpoint, pathParams, queryParams);

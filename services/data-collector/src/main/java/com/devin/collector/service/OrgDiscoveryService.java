@@ -3,7 +3,7 @@ package com.devin.collector.service;
 import com.devin.collector.config.CollectorProperties;
 import com.devin.common.config.EndpointLoader;
 import com.devin.common.model.EndpointDefinition;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.devin.common.util.JsonResponseParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -30,8 +29,8 @@ public class OrgDiscoveryService {
     private final OrgApiClient orgApiClient;
     private final EndpointLoader endpointLoader;
     private final CollectorProperties properties;
+    private final ObjectMapper objectMapper;
     private final ScheduledExecutorService discoveryExecutor;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private volatile List<String> cachedOrgIds = Collections.emptyList();
     private volatile boolean initialized = false;
@@ -39,11 +38,13 @@ public class OrgDiscoveryService {
     public OrgDiscoveryService(DevinApiClient devinApiClient,
                                OrgApiClient orgApiClient,
                                EndpointLoader endpointLoader,
-                               CollectorProperties properties) {
+                               CollectorProperties properties,
+                               ObjectMapper objectMapper) {
         this.devinApiClient = devinApiClient;
         this.orgApiClient = orgApiClient;
         this.endpointLoader = endpointLoader;
         this.properties = properties;
+        this.objectMapper = objectMapper;
         this.discoveryExecutor =
                 Executors.newSingleThreadScheduledExecutor();
     }
@@ -105,23 +106,10 @@ public class OrgDiscoveryService {
                 return;
             }
 
-            JsonNode root = OBJECT_MAPPER.readTree(responseBody);
-            List<String> orgIds = new ArrayList<>();
-
-            JsonNode itemsNode = root.has("items") ? root.get("items")
-                    : root.has("organizations") ? root.get("organizations")
-                    : root.isArray() ? root : null;
-
-            if (itemsNode != null && itemsNode.isArray()) {
-                for (JsonNode orgNode : itemsNode) {
-                    JsonNode idNode = orgNode.has("id") ? orgNode.get("id")
-                            : orgNode.has("org_id")
-                            ? orgNode.get("org_id") : null;
-                    if (idNode != null && !idNode.asText().isBlank()) {
-                        orgIds.add(idNode.asText());
-                    }
-                }
-            }
+            List<String> orgIds = JsonResponseParser.extractIds(
+                    responseBody, objectMapper,
+                    List.of("organizations"),
+                    "id", "org_id");
 
             if (orgIds.isEmpty()) {
                 log.warn("list_organizations returned no org IDs.");

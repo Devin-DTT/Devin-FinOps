@@ -1,19 +1,27 @@
 package com.devin.websocket.handler;
 
+import com.devin.websocket.config.WebSocketProperties;
 import com.devin.websocket.service.SessionRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.util.Set;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.function.Consumer;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,13 +50,33 @@ class DevinWebSocketHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new DevinWebSocketHandler(sessionRegistry, redisTemplate);
+        WebSocketProperties properties = new WebSocketProperties();
+        properties.setRedisKeyPrefix("finops:endpoint:");
+        handler = new DevinWebSocketHandler(
+                sessionRegistry, redisTemplate,
+                new ObjectMapper(), properties);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Cursor<String> createMockCursor(List<String> keys) {
+        Cursor<String> cursor = mock(Cursor.class);
+        doAnswer(inv -> {
+            Consumer<String> action = inv.getArgument(0);
+            keys.forEach(action);
+            return null;
+        }).when(cursor).forEachRemaining(any());
+        return cursor;
+    }
+
+    private void stubScanReturning(List<String> keys) {
+        Cursor<String> cursor = createMockCursor(keys);
+        doReturn(cursor).when(redisTemplate).scan(any(ScanOptions.class));
     }
 
     @Test
     void afterConnectionEstablished_registersSession() throws Exception {
         when(session.getId()).thenReturn("session-1");
-        when(redisTemplate.keys(anyString())).thenReturn(Set.of());
+        stubScanReturning(List.of());
 
         handler.afterConnectionEstablished(session);
 
@@ -58,11 +86,10 @@ class DevinWebSocketHandlerTest {
     @Test
     void afterConnectionEstablished_sendsInitialSnapshot() throws Exception {
         when(session.getId()).thenReturn("session-1");
-        Set<String> keys = Set.of(
+        stubScanReturning(List.of(
                 "finops:endpoint:list_sessions",
                 "finops:endpoint:list_billing_cycles"
-        );
-        when(redisTemplate.keys("finops:endpoint:*")).thenReturn(keys);
+        ));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("finops:endpoint:list_sessions"))
                 .thenReturn("{\"sessions\":[]}");
@@ -77,7 +104,7 @@ class DevinWebSocketHandlerTest {
     @Test
     void afterConnectionEstablished_noKeys_noSnapshotSent() throws Exception {
         when(session.getId()).thenReturn("session-1");
-        when(redisTemplate.keys("finops:endpoint:*")).thenReturn(null);
+        stubScanReturning(List.of());
 
         handler.afterConnectionEstablished(session);
 
@@ -117,8 +144,7 @@ class DevinWebSocketHandlerTest {
     @Test
     void afterConnectionEstablished_parsesOrgKeyCorrectly() throws Exception {
         when(session.getId()).thenReturn("session-1");
-        Set<String> keys = Set.of("finops:endpoint:list_sessions__org_org123");
-        when(redisTemplate.keys("finops:endpoint:*")).thenReturn(keys);
+        stubScanReturning(List.of("finops:endpoint:list_sessions__org_org123"));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("finops:endpoint:list_sessions__org_org123"))
                 .thenReturn("{\"sessions\":[]}");

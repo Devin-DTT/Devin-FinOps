@@ -1,11 +1,11 @@
 package com.devin.finops.metrics.service;
 
+import com.devin.common.service.AbstractRedisCacheService;
 import com.devin.finops.metrics.config.MetricsProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -18,20 +18,16 @@ import java.util.Optional;
  * Reads metrics data cached by the data-collector from Redis.
  * Normalizes time-series data from epoch seconds to ISO date strings.
  */
-@Slf4j
 @Service
-public class MetricsCacheService {
+public class MetricsCacheService extends AbstractRedisCacheService {
 
-    private final StringRedisTemplate redisTemplate;
-    private final MetricsProperties properties;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
 
     public MetricsCacheService(StringRedisTemplate redisTemplate,
+                               ObjectMapper objectMapper,
                                MetricsProperties properties) {
-        this.redisTemplate = redisTemplate;
-        this.properties = properties;
+        super(redisTemplate, objectMapper, properties.getRedisKeyPrefix());
     }
 
     public Optional<JsonNode> getDauMetrics() {
@@ -72,19 +68,8 @@ public class MetricsCacheService {
      * This converts epoch seconds to ISO date strings for frontend consumption.
      */
     private Optional<JsonNode> readAndNormalize(String endpointName) {
-        try {
-            String key = properties.getRedisKeyPrefix() + endpointName;
-            String raw = redisTemplate.opsForValue().get(key);
-            if (raw == null || raw.isEmpty()) {
-                return Optional.empty();
-            }
-            JsonNode node = MAPPER.readTree(raw);
-            return Optional.of(normalizeTimeSeries(node));
-        } catch (Exception e) {
-            log.warn("Failed to read/normalize Redis key for {}: {}",
-                    endpointName, e.getMessage());
-        }
-        return Optional.empty();
+        Optional<JsonNode> nodeOpt = readKey(endpointName);
+        return nodeOpt.map(this::normalizeTimeSeries);
     }
 
     /**
@@ -104,11 +89,11 @@ public class MetricsCacheService {
             return node;
         }
 
-        ArrayNode normalized = MAPPER.createArrayNode();
+        ArrayNode normalized = mapper.createArrayNode();
         for (JsonNode entry : entries) {
             ObjectNode obj = entry.isObject()
                     ? ((ObjectNode) entry).deepCopy()
-                    : MAPPER.createObjectNode();
+                    : mapper.createObjectNode();
 
             // Convert start_time epoch to ISO date
             if (obj.has("start_time") && obj.get("start_time").isNumber()) {
