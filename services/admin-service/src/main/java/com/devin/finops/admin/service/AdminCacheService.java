@@ -1,9 +1,9 @@
 package com.devin.finops.admin.service;
 
+import com.devin.common.service.AbstractRedisCacheService;
 import com.devin.finops.admin.config.AdminProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,18 +13,13 @@ import java.util.Optional;
  * Reads admin data cached by the data-collector from Redis.
  * NOTE: Secrets and audit logs are NEVER cached for security reasons.
  */
-@Slf4j
 @Service
-public class AdminCacheService {
-
-    private final StringRedisTemplate redisTemplate;
-    private final AdminProperties properties;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+public class AdminCacheService extends AbstractRedisCacheService {
 
     public AdminCacheService(StringRedisTemplate redisTemplate,
+                             ObjectMapper objectMapper,
                              AdminProperties properties) {
-        this.redisTemplate = redisTemplate;
-        this.properties = properties;
+        super(redisTemplate, objectMapper, properties.getRedisKeyPrefix());
     }
 
     public Optional<JsonNode> getOrganizations() {
@@ -65,18 +60,5 @@ public class AdminCacheService {
 
     public Optional<JsonNode> getQueueStatus() {
         return readKey("get_queue_status");
-    }
-
-    private Optional<JsonNode> readKey(String endpointName) {
-        try {
-            String key = properties.getRedisKeyPrefix() + endpointName;
-            String raw = redisTemplate.opsForValue().get(key);
-            if (raw != null && !raw.isEmpty()) {
-                return Optional.of(MAPPER.readTree(raw));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read Redis key for {}: {}", endpointName, e.getMessage());
-        }
-        return Optional.empty();
     }
 }

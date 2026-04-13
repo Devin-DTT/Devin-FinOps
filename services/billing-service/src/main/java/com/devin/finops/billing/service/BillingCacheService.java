@@ -1,9 +1,9 @@
 package com.devin.finops.billing.service;
 
+import com.devin.common.service.AbstractRedisCacheService;
 import com.devin.finops.billing.config.BillingProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -12,18 +12,13 @@ import java.util.Optional;
 /**
  * Reads billing/consumption data cached by the data-collector from Redis.
  */
-@Slf4j
 @Service
-public class BillingCacheService {
-
-    private final StringRedisTemplate redisTemplate;
-    private final BillingProperties properties;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+public class BillingCacheService extends AbstractRedisCacheService {
 
     public BillingCacheService(StringRedisTemplate redisTemplate,
+                               ObjectMapper objectMapper,
                                BillingProperties properties) {
-        this.redisTemplate = redisTemplate;
-        this.properties = properties;
+        super(redisTemplate, objectMapper, properties.getRedisKeyPrefix());
     }
 
     public Optional<JsonNode> getBillingCycles() {
@@ -48,10 +43,9 @@ public class BillingCacheService {
      */
     public int getUserCount() {
         try {
-            String key = properties.getRedisKeyPrefix() + "list_users";
-            String raw = redisTemplate.opsForValue().get(key);
-            if (raw != null && !raw.isEmpty()) {
-                JsonNode node = MAPPER.readTree(raw);
+            Optional<JsonNode> nodeOpt = readKey("list_users");
+            if (nodeOpt.isPresent()) {
+                JsonNode node = nodeOpt.get();
                 if (node.has("total")) {
                     return node.get("total").asInt(0);
                 }
@@ -60,7 +54,7 @@ public class BillingCacheService {
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to read user count from Redis: {}", e.getMessage());
+            // Already logged in readKey
         }
         return 0;
     }
@@ -71,18 +65,5 @@ public class BillingCacheService {
      */
     public JsonNode readKeyDirect(String endpointName) {
         return readKey(endpointName).orElse(null);
-    }
-
-    private Optional<JsonNode> readKey(String endpointName) {
-        try {
-            String key = properties.getRedisKeyPrefix() + endpointName;
-            String raw = redisTemplate.opsForValue().get(key);
-            if (raw != null && !raw.isEmpty()) {
-                return Optional.of(MAPPER.readTree(raw));
-            }
-        } catch (Exception e) {
-            log.warn("Failed to read Redis key for {}: {}", endpointName, e.getMessage());
-        }
-        return Optional.empty();
     }
 }

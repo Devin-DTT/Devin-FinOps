@@ -1,7 +1,13 @@
 package com.devin.websocket.handler;
 
+import com.devin.common.model.WebSocketPayload;
+import com.devin.websocket.config.WebSocketProperties;
 import com.devin.websocket.service.SessionRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -9,6 +15,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -30,13 +37,17 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     private final SessionRegistry sessionRegistry;
     private final StringRedisTemplate redisTemplate;
-
-    private static final String REDIS_KEY_PATTERN = "finops:endpoint:*";
+    private final ObjectMapper objectMapper;
+    private final String redisKeyPrefix;
 
     public DevinWebSocketHandler(SessionRegistry sessionRegistry,
-                                 StringRedisTemplate redisTemplate) {
+                                 StringRedisTemplate redisTemplate,
+                                 ObjectMapper objectMapper,
+                                 WebSocketProperties properties) {
         this.sessionRegistry = sessionRegistry;
         this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.redisKeyPrefix = properties.getRedisKeyPrefix();
     }
 
     @Override
@@ -73,12 +84,19 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
 
     /**
      * Sends the initial snapshot to a newly connected client by reading
-     * all cached endpoint data from Redis.
+     * all cached endpoint data from Redis using SCAN (non-blocking).
      */
     private void sendInitialSnapshot(WebSocketSession session) {
         try {
-            Set<String> keys = redisTemplate.keys(REDIS_KEY_PATTERN);
-            if (keys == null || keys.isEmpty()) {
+            String keyPattern = redisKeyPrefix + "*";
+            Set<String> keys = new HashSet<>();
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(keyPattern).count(100).build();
+            try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                cursor.forEachRemaining(keys::add);
+            }
+
+            if (keys.isEmpty()) {
                 log.info("No cached data in Redis for initial snapshot");
                 return;
             }
@@ -86,11 +104,7 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
             for (String key : keys) {
                 String rawData = redisTemplate.opsForValue().get(key);
                 if (rawData != null && !rawData.isEmpty()) {
-                    // Key format: finops:endpoint:{endpoint_name}
-                    // or finops:endpoint:{endpoint_name}__org_{orgId}
-                    String endpointKey = key.replace("finops:endpoint:", "");
-
-                    // Build a payload matching the WebSocket message format
+                    String endpointKey = key.replace(redisKeyPrefix, "");
                     String payload = buildSnapshotPayload(endpointKey, rawData);
                     sessionRegistry.sendToSession(session, payload);
                 }
@@ -109,41 +123,20 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
      */
     private String buildSnapshotPayload(String endpointKey, String rawData) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper =
-                    new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.node.ObjectNode node =
-                    mapper.createObjectNode();
-            node.put("type", "data");
-            node.put("timestamp", System.currentTimeMillis());
-
-            // Parse org_id from cache key if present
-            // Format: endpoint_name__org_orgId
-            String endpointName;
-            String orgId = null;
-            if (endpointKey.contains("__org_")) {
-                int idx = endpointKey.indexOf("__org_");
-                endpointName = endpointKey.substring(0, idx);
-                orgId = endpointKey.substring(idx + 6);
-            } else {
-                endpointName = endpointKey;
-            }
-
-            node.put("endpoint", endpointName);
-            if (orgId != null) {
-                node.put("org_id", orgId);
-            }
-
-            if (rawData.isEmpty()) {
-                node.putNull("data");
-            } else {
-                node.set("data", mapper.readTree(rawData));
-            }
-            return mapper.writeValueAsString(node);
+            WebSocketPayload payload = WebSocketPayload.fromCacheKey(
+                    endpointKey, rawData, objectMapper);
+            return payload.toJson(objectMapper);
         } catch (Exception e) {
             log.error("Failed to build snapshot payload for {}: {}",
                     endpointKey, e.getMessage());
-            return "{\"type\":\"error\",\"endpoint\":\""
-                    + endpointKey.replace("\"", "\\\"") + "\"}";
+            try {
+                ObjectNode errorNode = objectMapper.createObjectNode();
+                errorNode.put("type", "error");
+                errorNode.put("endpoint", endpointKey);
+                return objectMapper.writeValueAsString(errorNode);
+            } catch (Exception ex) {
+                return "{\"type\":\"error\"}";
+            }
         }
     }
 }
