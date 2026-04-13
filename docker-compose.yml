@@ -90,8 +90,11 @@ services:
       - COLLECTOR_METRICS_POLLING_SECONDS=${COLLECTOR_METRICS_POLLING_SECONDS:-30}
       - COLLECTOR_BILLING_POLLING_SECONDS=${COLLECTOR_BILLING_POLLING_SECONDS:-60}
       - COLLECTOR_ADMIN_POLLING_SECONDS=${COLLECTOR_ADMIN_POLLING_SECONDS:-300}
+      - COLLECTOR_DUMP_ENABLED=${COLLECTOR_DUMP_ENABLED:-true}
+      - COLLECTOR_DUMP_INTERVAL_SECONDS=${COLLECTOR_DUMP_INTERVAL_SECONDS:-30}
     volumes:
       - ./endpoints.yaml:/app/endpoints.yaml:ro
+      - .:/app/dump:rw
     depends_on:
       redis:
         condition: service_healthy

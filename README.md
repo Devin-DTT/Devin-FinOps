@@ -95,6 +95,26 @@ docker-compose up --build
 open http://localhost:4200
 ```
 
+### Automatic Raw Endpoint Data Dump
+
+When running with `docker-compose up`, the file `raw-endpoint-data.json` is automatically generated in the repository root every 30 seconds with the raw data from all endpoints cached in Redis. No manual scripts or `curl` commands are needed.
+
+The dump behavior is configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `COLLECTOR_DUMP_ENABLED` | `true` | Enable/disable automatic dump |
+| `COLLECTOR_DUMP_INTERVAL_SECONDS` | `30` | Interval between dump writes (seconds) |
+| `COLLECTOR_DUMP_FILE_PATH` | `/app/dump/raw-endpoint-data.json` | File path inside the container |
+
+To disable the automatic dump:
+
+```bash
+COLLECTOR_DUMP_ENABLED=false docker-compose up --build
+```
+
+> **Note**: `raw-endpoint-data.json` is already in `.gitignore` and will not be committed to the repository.
+
 ### Services Architecture
 
 | Service | Port | Description |

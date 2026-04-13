@@ -44,4 +44,13 @@ public class CollectorProperties {
 
     /** Maximum number of sessions to poll for detail endpoints (default: 20). */
     private int maxSessionDetailPolling = 20;
+
+    /** Whether to automatically dump raw endpoint data to a file (default: true). */
+    private boolean dumpEnabled = true;
+
+    /** Path to write the raw endpoint data dump file. */
+    private String dumpFilePath = "/app/dump/raw-endpoint-data.json";
+
+    /** Interval in seconds between automatic dump writes (default: 30). */
+    private long dumpIntervalSeconds = 30;
 }
