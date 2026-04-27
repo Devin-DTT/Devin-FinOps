@@ -10,6 +10,7 @@ export class BillingStateService {
   billingCycles = signal<BillingCycle[]>([]);
   dailyConsumption = signal<DailyConsumption[]>([]);
   lastUpdated = signal(0);
+  private billingCycleReceived = signal(false);
 
   // Computed signals
   acuUsagePercent = computed(() =>
@@ -38,6 +39,7 @@ export class BillingStateService {
   private handleBillingCycles(data: Record<string, unknown>): void {
     const cycles = this.extractArray<BillingCycle>(data, 'cycles');
     this.billingCycles.set(cycles);
+    this.billingCycleReceived.set(true);
     if (cycles.length > 0) {
       const current = cycles[cycles.length - 1];
       this.currentCycleAcu.set(current.acu_usage ?? 0);
@@ -48,7 +50,7 @@ export class BillingStateService {
   private handleDailyConsumption(data: Record<string, unknown>): void {
     // Use total_acus as current cycle ACU when billing cycles are unavailable
     const totalAcus = data['total_acus'];
-    if (typeof totalAcus === 'number' && totalAcus > 0 && this.currentCycleAcu() === 0) {
+    if (typeof totalAcus === 'number' && totalAcus > 0 && !this.billingCycleReceived()) {
       this.currentCycleAcu.set(totalAcus);
     }
 
