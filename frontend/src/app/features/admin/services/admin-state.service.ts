@@ -34,7 +34,7 @@ export class AdminStateService {
     this.orgCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'organizations').length
+        : this.extractArray(data, 'items', 'organizations').length
     );
   }
 
@@ -42,7 +42,7 @@ export class AdminStateService {
     this.userCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'users').length
+        : this.extractArray(data, 'items', 'users').length
     );
   }
 
@@ -50,14 +50,16 @@ export class AdminStateService {
     this.hypervisorCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'hypervisors').length
+        : this.extractArray(data, 'items', 'hypervisors').length
     );
   }
 
-  private extractArray(data: Record<string, unknown>, key: string): unknown[] {
+  private extractArray(data: Record<string, unknown>, ...keys: string[]): unknown[] {
     if (Array.isArray(data)) return data;
-    const value = data[key];
-    if (Array.isArray(value)) return value;
+    for (const key of keys) {
+      const value = data[key];
+      if (Array.isArray(value)) return value;
+    }
     for (const k of Object.keys(data)) {
       if (Array.isArray(data[k])) return data[k] as unknown[];
     }
