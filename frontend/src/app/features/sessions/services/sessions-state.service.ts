@@ -44,7 +44,6 @@ export class SessionsStateService {
       const resp = data as unknown as SessionsResponse;
       sessionList = Array.isArray(resp.sessions) ? resp.sessions : [];
     }
-
     this.sessions.set(sessionList);
     this.totalSessions.set(sessionList.length);
     this.runningSessions.set(sessionList.filter(s => s.status === 'running').length);
