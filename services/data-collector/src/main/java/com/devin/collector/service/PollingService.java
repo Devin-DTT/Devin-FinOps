@@ -300,7 +300,7 @@ public class PollingService {
                                 boolean useOrgClient) {
         Flux<String> responseFlux;
         if (useOrgClient && orgApiClient.isAvailable()) {
-            responseFlux = orgApiClient.get(endpoint, pathParams);
+            responseFlux = orgApiClient.get(endpoint, pathParams, queryParams);
         } else {
             responseFlux = devinApiClient.get(endpoint, pathParams, queryParams);
         }
