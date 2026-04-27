@@ -80,8 +80,12 @@ public abstract class BaseApiClient {
                     return Flux.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
-                .doOnError(e -> log.error("Error calling endpoint {}: {}",
-                        endpoint.getName(), e.getMessage()));
+                .doOnError(e -> {
+                    if (!(e instanceof WebClientResponseException.NotFound)) {
+                        log.error("Error calling endpoint {}: {}",
+                                endpoint.getName(), e.getMessage());
+                    }
+                });
     }
 
     /**
@@ -122,8 +126,12 @@ public abstract class BaseApiClient {
                     return Mono.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
-                .doOnError(e -> log.error("Error calling endpoint {}: {}",
-                        endpoint.getName(), e.getMessage()));
+                .doOnError(e -> {
+                    if (!(e instanceof WebClientResponseException.NotFound)) {
+                        log.error("Error calling endpoint {}: {}",
+                                endpoint.getName(), e.getMessage());
+                    }
+                });
     }
 
     private Retry retrySpec(String endpointName) {
