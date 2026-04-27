@@ -310,6 +310,11 @@ public class PollingService {
                 .subscribe(
                         dataChunks -> {
                             String rawData = String.join("", dataChunks);
+                            if (rawData.isEmpty()) {
+                                log.debug("Empty response for endpoint {} - skipping cache/publish",
+                                        endpoint.getName());
+                                return;
+                            }
                             snapshotService.cacheEndpointData(cacheKey, rawData);
                             snapshotService.publishUpdate(
                                     endpoint.getName(), rawData, orgId);
