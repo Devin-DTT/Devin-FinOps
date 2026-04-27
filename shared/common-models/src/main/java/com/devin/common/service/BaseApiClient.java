@@ -79,12 +79,6 @@ public abstract class BaseApiClient {
                             getScopeLabel(), endpoint.getName());
                     return Flux.error(ex);
                 })
-                .onErrorResume(
-                        WebClientResponseException.NotFound.class, ex -> {
-                    log.warn("{} endpoint {} not found (HTTP 404). Verify the endpoint path in endpoints.yaml: {}",
-                            getScopeLabel(), endpoint.getName(), url);
-                    return Flux.empty();
-                })
                 .retryWhen(retrySpec(endpoint.getName()))
                 .doOnError(e -> log.error("Error calling endpoint {}: {}",
                         endpoint.getName(), e.getMessage()));
@@ -126,12 +120,6 @@ public abstract class BaseApiClient {
                     log.error("{} service user token lacks permissions for {} (HTTP 403). Check service user permissions.",
                             getScopeLabel(), endpoint.getName());
                     return Mono.error(ex);
-                })
-                .onErrorResume(
-                        WebClientResponseException.NotFound.class, ex -> {
-                    log.warn("{} endpoint {} not found (HTTP 404). Verify the endpoint path in endpoints.yaml: {}",
-                            getScopeLabel(), endpoint.getName(), url);
-                    return Mono.empty();
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
                 .doOnError(e -> log.error("Error calling endpoint {}: {}",

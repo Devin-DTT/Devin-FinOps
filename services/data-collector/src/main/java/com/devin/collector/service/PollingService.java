@@ -7,6 +7,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 
 import java.time.Instant;
@@ -319,10 +320,16 @@ public class PollingService {
                             snapshotService.publishUpdate(
                                     endpoint.getName(), rawData, orgId);
                         },
-                        error -> log.warn(
-                                "Poll error for endpoint {} (cache key {}): {}",
-                                endpoint.getName(), cacheKey,
-                                error.getMessage())
+                        error -> {
+                            if (error instanceof WebClientResponseException.NotFound) {
+                                log.debug("Endpoint {} returned 404 - skipping",
+                                        endpoint.getName());
+                            } else {
+                                log.warn("Poll error for endpoint {} (cache key {}): {}",
+                                        endpoint.getName(), cacheKey,
+                                        error.getMessage());
+                            }
+                        }
                 );
     }
 
