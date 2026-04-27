@@ -1,4 +1,4 @@
-export type SessionStatus = 'running' | 'finished' | 'failed' | 'stopped' | 'suspended' | 'blocked' | 'unknown';
+export type SessionStatus = 'running' | 'finished' | 'failed' | 'stopped' | 'suspended' | 'blocked' | 'error' | 'unknown';
 
 export interface DevinSession {
   session_id: string;

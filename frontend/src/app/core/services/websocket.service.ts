@@ -1,5 +1,5 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { Observable, Subject, timer, EMPTY } from 'rxjs';
+import { Observable, BehaviorSubject, Subject, timer, EMPTY } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { WebSocketMessage } from '../../models/devin-data.model';
@@ -13,7 +13,7 @@ export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting';
 export class WebSocketService implements OnDestroy {
   private socket$: WebSocketSubject<WebSocketMessage> | null = null;
   private dataSubject$ = new Subject<WebSocketMessage>();
-  private connectionStatusSubject$ = new Subject<ConnectionStatus>();
+  private connectionStatusSubject$ = new BehaviorSubject<ConnectionStatus>('disconnected');
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 10;
   private readonly initialReconnectDelay = 1000;

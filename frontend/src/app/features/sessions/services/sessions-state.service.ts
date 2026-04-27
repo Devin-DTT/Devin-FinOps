@@ -11,6 +11,8 @@ export class SessionsStateService {
   finishedSessions = signal(0);
   failedSessions = signal(0);
   stoppedSessions = signal(0);
+  suspendedSessions = signal(0);
+  errorSessions = signal(0);
   lastUpdated = signal(0);
 
   // Computed signals
@@ -47,7 +49,9 @@ export class SessionsStateService {
     this.totalSessions.set(sessionList.length);
     this.runningSessions.set(sessionList.filter(s => s.status === 'running').length);
     this.finishedSessions.set(sessionList.filter(s => s.status === 'finished').length);
-    this.failedSessions.set(sessionList.filter(s => s.status === 'failed').length);
+    this.failedSessions.set(sessionList.filter(s => s.status === 'failed' || s.status === 'error').length);
     this.stoppedSessions.set(sessionList.filter(s => s.status === 'stopped').length);
+    this.suspendedSessions.set(sessionList.filter(s => s.status === 'suspended').length);
+    this.errorSessions.set(sessionList.filter(s => s.status === 'error').length);
   }
 }
