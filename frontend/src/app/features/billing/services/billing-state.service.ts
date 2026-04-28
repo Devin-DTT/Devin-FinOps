@@ -39,8 +39,8 @@ export class BillingStateService {
   private handleBillingCycles(data: Record<string, unknown>): void {
     const cycles = this.extractArray<BillingCycle>(data, 'cycles');
     this.billingCycles.set(cycles);
-    this.billingCycleReceived.set(true);
     if (cycles.length > 0) {
+      this.billingCycleReceived.set(true);
       const current = cycles[cycles.length - 1];
       this.currentCycleAcu.set(current.acu_usage ?? 0);
       this.currentCycleLimit.set(current.acu_limit ?? 0);

@@ -166,9 +166,12 @@ export class SessionsComponent implements OnInit {
     return colorMap[status] || '';
   }
 
-  formatTimestamp(isoString: string): string {
-    if (!isoString) return '-';
-    return new Date(isoString).toLocaleString();
+  formatTimestamp(ts: number | string): string {
+    if (!ts) return '-';
+    const val = typeof ts === 'number' ? ts : Number(ts);
+    if (isNaN(val)) return new Date(ts).toLocaleString();
+    const ms = val < 1e12 ? val * 1000 : val;
+    return new Date(ms).toLocaleString();
   }
 
   private applyFilter(): void {
