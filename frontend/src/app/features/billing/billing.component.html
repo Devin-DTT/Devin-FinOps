@@ -32,8 +32,8 @@
   <!-- Consumo y Facturación -->
   <div class="finops-section-title">Consumo y Facturación</div>
   <div class="charts-row">
-    <app-chart-card title="Consumo Diario de ACUs" [chartData]="acuChartData" [chartOptions]="acuChartOptions" chartType="line"></app-chart-card>
-    <app-chart-card title="Histórico de Ciclos de Facturación" [chartData]="billingCyclesChartData" [chartOptions]="billingCyclesChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Consumo Diario de ACUs" [chartData]="acuChartData()" [chartOptions]="acuChartOptions" chartType="line"></app-chart-card>
+    <app-chart-card title="Histórico de Ciclos de Facturación" [chartData]="billingCyclesChartData()" [chartOptions]="billingCyclesChartOptions" chartType="bar"></app-chart-card>
   </div>
 
   <!-- N/A Cards -->

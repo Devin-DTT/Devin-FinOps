@@ -1,4 +1,4 @@
-import { Component, inject, ViewChild, OnInit } from '@angular/core';
+import { Component, inject, ViewChild, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatCardModule } from '@angular/material/card';
@@ -97,7 +97,7 @@ export class SessionsComponent implements OnInit {
   }
 
   // Session donut chart
-  get sessionDonutData(): ChartData<'doughnut'> {
+  sessionDonutData = computed<ChartData<'doughnut'>>(() => {
     return {
       labels: ['Running', 'Finished', 'Failed', 'Stopped'],
       datasets: [{
@@ -111,7 +111,7 @@ export class SessionsComponent implements OnInit {
         hoverBackgroundColor: ['#5c6bc0', '#66bb6a', '#ef5350', '#bdbdbd']
       }]
     };
-  }
+  });
 
   sessionDonutOptions: ChartConfiguration<'doughnut'>['options'] = {
     responsive: true, maintainAspectRatio: false,
@@ -119,7 +119,7 @@ export class SessionsComponent implements OnInit {
   };
 
   // Sessions metrics chart
-  get sessionsMetricsChartData(): ChartData<'bar'> {
+  sessionsMetricsChartData = computed<ChartData<'bar'>>(() => {
     const metrics = this.metricsState.sessionsMetrics();
     return {
       labels: metrics.map(m => m.date ?? ''),
@@ -128,7 +128,7 @@ export class SessionsComponent implements OnInit {
         label: 'Sessions', backgroundColor: '#3f51b5', borderColor: '#3f51b5', borderWidth: 1
       }]
     };
-  }
+  });
 
   sessionsMetricsChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true, maintainAspectRatio: false,
