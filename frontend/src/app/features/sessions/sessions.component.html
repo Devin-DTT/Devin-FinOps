@@ -37,8 +37,8 @@
   <!-- Charts -->
   <div class="finops-section-title">Actividad</div>
   <div class="charts-row">
-    <app-chart-card title="Distribución de Sesiones" [chartData]="sessionDonutData" [chartOptions]="sessionDonutOptions" chartType="doughnut"></app-chart-card>
-    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Distribución de Sesiones" [chartData]="sessionDonutData()" [chartOptions]="sessionDonutOptions" chartType="doughnut"></app-chart-card>
+    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData()" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
   </div>
 
   <!-- Sessions Table -->

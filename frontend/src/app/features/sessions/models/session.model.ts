@@ -1,12 +1,13 @@
-export type SessionStatus = 'running' | 'finished' | 'failed' | 'stopped' | 'suspended' | 'blocked' | 'unknown';
+export type SessionStatus = 'running' | 'finished' | 'failed' | 'stopped' | 'suspended' | 'blocked' | 'error' | 'unknown';
 
 export interface DevinSession {
   session_id: string;
   title?: string;
   status: SessionStatus;
   status_enum?: string;
-  created_at: string;
-  updated_at?: string;
+  created_at: number | string;
+  updated_at?: number | string;
+  acus_consumed?: number;
   is_archived?: boolean;
   snap_count?: number;
   total_tokens?: number;

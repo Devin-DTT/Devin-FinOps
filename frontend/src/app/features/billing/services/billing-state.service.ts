@@ -10,6 +10,7 @@ export class BillingStateService {
   billingCycles = signal<BillingCycle[]>([]);
   dailyConsumption = signal<DailyConsumption[]>([]);
   lastUpdated = signal(0);
+  private billingCycleReceived = signal(false);
 
   // Computed signals
   acuUsagePercent = computed(() =>
@@ -39,6 +40,7 @@ export class BillingStateService {
     const cycles = this.extractArray<BillingCycle>(data, 'cycles');
     this.billingCycles.set(cycles);
     if (cycles.length > 0) {
+      this.billingCycleReceived.set(true);
       const current = cycles[cycles.length - 1];
       this.currentCycleAcu.set(current.acu_usage ?? 0);
       this.currentCycleLimit.set(current.acu_limit ?? 0);
@@ -46,6 +48,12 @@ export class BillingStateService {
   }
 
   private handleDailyConsumption(data: Record<string, unknown>): void {
+    // Use total_acus as current cycle ACU when billing cycles are unavailable
+    const totalAcus = data['total_acus'];
+    if (typeof totalAcus === 'number' && totalAcus > 0 && !this.billingCycleReceived()) {
+      this.currentCycleAcu.set(totalAcus);
+    }
+
     let entries: DailyConsumption[] = [];
     if (Array.isArray(data['daily_consumption'])) {
       entries = data['daily_consumption'] as DailyConsumption[];
@@ -64,9 +72,25 @@ export class BillingStateService {
   }
 
   private handleAcuLimits(data: Record<string, unknown>): void {
+    // Direct top-level fields
     const limit = this.extractNumber(data, 'acu_limit') ?? this.extractNumber(data, 'limit');
     if (limit !== null) {
       this.currentCycleLimit.set(limit);
+      return;
+    }
+    // API returns {items: [{cycle_acu_limit: N, scope: "...", org_id: "..."}]}
+    const items = data['items'];
+    if (Array.isArray(items)) {
+      let totalLimit = 0;
+      for (const item of items as Record<string, unknown>[]) {
+        const cycleLimit = item['cycle_acu_limit'];
+        if (typeof cycleLimit === 'number') {
+          totalLimit += cycleLimit;
+        }
+      }
+      if (totalLimit > 0) {
+        this.currentCycleLimit.set(totalLimit);
+      }
     }
   }
 

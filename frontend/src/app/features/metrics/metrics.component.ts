@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ChartConfiguration, ChartData } from 'chart.js';
 
@@ -30,7 +30,7 @@ export class MetricsComponent {
   metricsState = inject(MetricsStateService);
 
   // PRs chart
-  get prsChartData(): ChartData<'bar'> {
+  prsChartData = computed<ChartData<'bar'>>(() => {
     const metrics = this.metricsState.prsMetrics();
     return {
       labels: metrics.map(m => m.date ?? ''),
@@ -39,7 +39,7 @@ export class MetricsComponent {
         label: 'Pull Requests', backgroundColor: '#9c27b0', borderColor: '#9c27b0', borderWidth: 1
       }]
     };
-  }
+  });
 
   prsChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true, maintainAspectRatio: false,
@@ -51,7 +51,7 @@ export class MetricsComponent {
   };
 
   // Sessions metrics chart
-  get sessionsMetricsChartData(): ChartData<'bar'> {
+  sessionsMetricsChartData = computed<ChartData<'bar'>>(() => {
     const metrics = this.metricsState.sessionsMetrics();
     return {
       labels: metrics.map(m => m.date ?? ''),
@@ -60,7 +60,7 @@ export class MetricsComponent {
         label: 'Sessions', backgroundColor: '#3f51b5', borderColor: '#3f51b5', borderWidth: 1
       }]
     };
-  }
+  });
 
   sessionsMetricsChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true, maintainAspectRatio: false,
@@ -72,7 +72,7 @@ export class MetricsComponent {
   };
 
   // Usage chart
-  get usageChartData(): ChartData<'line'> {
+  usageChartData = computed<ChartData<'line'>>(() => {
     const metrics = this.metricsState.usageMetrics();
     return {
       labels: metrics.map(m => m.date ?? ''),
@@ -82,7 +82,7 @@ export class MetricsComponent {
         borderColor: '#00bcd4', backgroundColor: 'rgba(0, 188, 212, 0.1)'
       }]
     };
-  }
+  });
 
   usageChartOptions: ChartConfiguration<'line'>['options'] = {
     responsive: true, maintainAspectRatio: false,
@@ -94,7 +94,7 @@ export class MetricsComponent {
   };
 
   // Searches chart
-  get searchesChartData(): ChartData<'bar'> {
+  searchesChartData = computed<ChartData<'bar'>>(() => {
     const metrics = this.metricsState.searchesMetrics();
     return {
       labels: metrics.map(m => m.date ?? ''),
@@ -103,7 +103,7 @@ export class MetricsComponent {
         label: 'Searches', backgroundColor: '#009688', borderColor: '#009688', borderWidth: 1
       }]
     };
-  }
+  });
 
   searchesChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true, maintainAspectRatio: false,
