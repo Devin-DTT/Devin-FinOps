@@ -80,12 +80,14 @@ export class SessionsComponent implements OnInit {
   statusOptions: Array<SessionStatus | 'all'> = ['all', 'running', 'finished', 'failed', 'stopped', 'suspended', 'blocked'];
 
   get acuPerPr(): number {
-    const totalPrs = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
+    const timeSeriesTotal = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
+    const totalPrs = timeSeriesTotal > 0 ? timeSeriesTotal : this.metricsState.prsCreatedTotal();
     return totalPrs > 0 ? this.billingState.currentCycleAcu() / totalPrs : 0;
   }
 
   get prsPerAcu(): number {
-    const totalPrs = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
+    const timeSeriesTotal = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
+    const totalPrs = timeSeriesTotal > 0 ? timeSeriesTotal : this.metricsState.prsCreatedTotal();
     return this.billingState.currentCycleAcu() > 0 ? totalPrs / this.billingState.currentCycleAcu() : 0;
   }
 
@@ -99,16 +101,17 @@ export class SessionsComponent implements OnInit {
   // Session donut chart
   sessionDonutData = computed<ChartData<'doughnut'>>(() => {
     return {
-      labels: ['Running', 'Finished', 'Failed', 'Stopped'],
+      labels: ['Running', 'Finished', 'Failed', 'Stopped', 'Suspended'],
       datasets: [{
         data: [
           this.sessionsState.runningSessions(),
           this.sessionsState.finishedSessions(),
           this.sessionsState.failedSessions(),
-          this.sessionsState.stoppedSessions()
+          this.sessionsState.stoppedSessions(),
+          this.sessionsState.suspendedSessions()
         ],
-        backgroundColor: ['#3f51b5', '#4caf50', '#f44336', '#9e9e9e'],
-        hoverBackgroundColor: ['#5c6bc0', '#66bb6a', '#ef5350', '#bdbdbd']
+        backgroundColor: ['#3f51b5', '#4caf50', '#f44336', '#9e9e9e', '#ff9800'],
+        hoverBackgroundColor: ['#5c6bc0', '#66bb6a', '#ef5350', '#bdbdbd', '#ffb74d']
       }]
     };
   });

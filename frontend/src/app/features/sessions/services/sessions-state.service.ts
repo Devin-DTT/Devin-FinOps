@@ -45,7 +45,8 @@ export class SessionsStateService {
       sessionList = Array.isArray(resp.sessions) ? resp.sessions : [];
     }
     this.sessions.set(sessionList);
-    this.totalSessions.set(sessionList.length);
+    const apiTotal = typeof data['total'] === 'number' ? (data['total'] as number) : 0;
+    this.totalSessions.set(apiTotal > 0 ? apiTotal : sessionList.length);
     this.runningSessions.set(sessionList.filter(s => s.status === 'running').length);
     this.finishedSessions.set(sessionList.filter(s => s.status === 'finished').length);
     this.failedSessions.set(sessionList.filter(s => s.status === 'failed' || s.status === 'error').length);

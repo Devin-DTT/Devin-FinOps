@@ -8,6 +8,7 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { BillingStateService } from './services/billing-state.service';
 import { AdminStateService } from '../admin/services/admin-state.service';
 import { SessionsStateService } from '../sessions/services/sessions-state.service';
+import { MetricsStateService } from '../metrics/services/metrics-state.service';
 import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.component';
 import { NaCardComponent } from '../../shared/components/na-card/na-card.component';
 import { ChartCardComponent } from '../../shared/components/chart-card/chart-card.component';
@@ -50,6 +51,7 @@ export class BillingComponent {
   billingState = inject(BillingStateService);
   adminState = inject(AdminStateService);
   sessionsState = inject(SessionsStateService);
+  metricsState = inject(MetricsStateService);
 
   get acuPerUser(): number {
     return this.adminState.userCount() > 0

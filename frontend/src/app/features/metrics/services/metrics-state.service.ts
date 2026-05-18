@@ -15,6 +15,12 @@ export class MetricsStateService {
   activeUsersMetrics = signal<MetricDataPoint[]>([]);
   lastUpdated = signal(0);
 
+  // Summary totals (from endpoints that return aggregates instead of time series)
+  prsCreatedTotal = signal(0);
+  prsMergedTotal = signal(0);
+  sessionsCreatedTotal = signal(0);
+  searchesCreatedTotal = signal(0);
+
   handleMessage(msg: WebSocketMessage): void {
     const data = msg.data as Record<string, unknown>;
     this.lastUpdated.set(msg.timestamp);
@@ -31,15 +37,20 @@ export class MetricsStateService {
         break;
       case 'get_sessions_metrics':
         this.sessionsMetrics.set(this.normalizeMetricTimeSeries(data, 'sessions'));
+        this.extractSessionsSummary(data);
         break;
       case 'get_prs_metrics':
         this.prsMetrics.set(this.normalizeMetricTimeSeries(data, 'prs'));
+        this.extractPrsSummary(data);
         break;
       case 'get_usage_metrics':
         this.usageMetrics.set(this.normalizeMetricTimeSeries(data, 'usage'));
         break;
       case 'get_searches_metrics':
         this.searchesMetrics.set(this.normalizeMetricTimeSeries(data, 'searches'));
+        if (typeof data['searches_created_count'] === 'number') {
+          this.searchesCreatedTotal.set(data['searches_created_count'] as number);
+        }
         break;
       case 'get_active_users_metrics':
         this.activeUsersMetrics.set(this.normalizeMetricTimeSeries(data, 'active_users'));
@@ -97,6 +108,21 @@ export class MetricsStateService {
         ?? 0;
       return { date: dateStr, count: val } as MetricDataPoint;
     });
+  }
+
+  private extractPrsSummary(data: Record<string, unknown>): void {
+    if (typeof data['prs_created_count'] === 'number') {
+      this.prsCreatedTotal.set(data['prs_created_count'] as number);
+    }
+    if (typeof data['prs_merged_count'] === 'number') {
+      this.prsMergedTotal.set(data['prs_merged_count'] as number);
+    }
+  }
+
+  private extractSessionsSummary(data: Record<string, unknown>): void {
+    if (typeof data['sessions_created_count'] === 'number') {
+      this.sessionsCreatedTotal.set(data['sessions_created_count'] as number);
+    }
   }
 
   private extractArray<T>(data: Record<string, unknown>, key: string): T[] {

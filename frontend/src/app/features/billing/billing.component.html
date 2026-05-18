@@ -2,10 +2,10 @@
   <!-- KPIs Principales -->
   <div class="finops-section-title">KPIs Principales</div>
   <div class="kpi-section">
-    <app-kpi-card title="ACUs Ciclo Actual" [value]="billingState.currentCycleAcu()" format="decimal" cssClass="kpi-acu"></app-kpi-card>
-    <app-kpi-card title="Límite ACU" [value]="billingState.currentCycleLimit()" format="integer"></app-kpi-card>
+    <app-kpi-card title="ACUs Consumidos (Total)" [value]="billingState.currentCycleAcu()" format="decimal" cssClass="kpi-acu"></app-kpi-card>
+    <app-kpi-card title="MAU (Usuarios Activos Mes)" [value]="metricsState.mauCount()" format="integer"></app-kpi-card>
     <app-kpi-card title="Total Sesiones" [value]="sessionsState.totalSessions()"></app-kpi-card>
-    <app-kpi-card title="Usuarios Activos" [value]="adminState.userCount()"></app-kpi-card>
+    <app-kpi-card title="Usuarios Registrados" [value]="adminState.userCount()"></app-kpi-card>
   </div>
 
   <!-- Métricas Calculadas -->
@@ -15,16 +15,16 @@
     <app-kpi-card title="ACUs por Sesión (ciclo)" [value]="acuPerSession" format="decimal2"></app-kpi-card>
   </div>
 
-  <!-- Progreso ACU -->
-  <div class="finops-section-title">Progreso ACU</div>
+  <!-- Resumen de Consumo -->
+  <div class="finops-section-title">Resumen de Consumo</div>
   <div class="kpi-section">
-    <mat-card class="kpi-card kpi-acu wide-card">
+    <mat-card class="kpi-card wide-card">
       <mat-card-header>
-        <mat-card-title>ACU Usage Progress</mat-card-title>
+        <mat-card-title>Consumo Total Enterprise</mat-card-title>
       </mat-card-header>
       <mat-card-content>
-        <mat-progress-bar mode="determinate" [value]="billingState.acuUsagePercent()" class="acu-bar"></mat-progress-bar>
-        <span class="kpi-sub">{{ billingState.acuUsagePercent() }}% usado ({{ billingState.currentCycleAcu() | number:'1.1-1' }} / {{ billingState.currentCycleLimit() | number:'1.0-0' }} ACUs)</span>
+        <span class="kpi-value kpi-acu">{{ billingState.currentCycleAcu() | number:'1.1-1' }} ACUs</span>
+        <span class="kpi-sub">Acumulado desde el inicio · {{ billingState.dailyConsumption().length }} días con actividad · Sin ciclo de facturación activo</span>
       </mat-card-content>
     </mat-card>
   </div>
