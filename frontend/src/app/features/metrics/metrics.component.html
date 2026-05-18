@@ -2,9 +2,9 @@
   <!-- Active Users KPIs -->
   <div class="finops-section-title">Usuarios Activos</div>
   <div class="kpi-section">
-    <app-kpi-card title="DAU" [value]="metricsState.dauCount()"></app-kpi-card>
-    <app-kpi-card title="WAU" [value]="metricsState.wauCount()"></app-kpi-card>
-    <app-kpi-card title="MAU" [value]="metricsState.mauCount()"></app-kpi-card>
+    <app-kpi-card title="DAU (Usuarios Activos Hoy)" [value]="metricsState.dauCount()" [subtitle]="metricsState.dauLabel()"></app-kpi-card>
+    <app-kpi-card title="WAU (Usuarios Activos Semana)" [value]="metricsState.wauCount()" [subtitle]="metricsState.wauLabel()"></app-kpi-card>
+    <app-kpi-card title="MAU (Usuarios Activos Mes)" [value]="metricsState.mauCount()" [subtitle]="metricsState.mauLabel()"></app-kpi-card>
   </div>
 
   <!-- Charts Row 1: PRs and Sessions -->
