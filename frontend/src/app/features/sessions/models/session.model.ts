@@ -5,6 +5,7 @@ export interface DevinSession {
   title?: string;
   status: SessionStatus;
   status_enum?: string;
+  status_detail?: string;
   created_at: number | string;
   updated_at?: number | string;
   acus_consumed?: number;
@@ -13,6 +14,7 @@ export interface DevinSession {
   total_tokens?: number;
   origin?: string;
   user_id?: string;
+  pull_requests?: Array<{ url?: string; status?: string }>;
   pull_request?: {
     url?: string;
     status?: string;

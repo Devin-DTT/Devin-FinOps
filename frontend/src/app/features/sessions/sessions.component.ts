@@ -79,39 +79,37 @@ export class SessionsComponent implements OnInit {
   selectedStatusFilter: SessionStatus | 'all' = 'all';
   statusOptions: Array<SessionStatus | 'all'> = ['all', 'running', 'finished', 'failed', 'stopped', 'suspended', 'blocked'];
 
+  get totalPrs(): number {
+    const fromSessions = this.sessionsState.totalPrsFromSessions();
+    const fromMetrics = this.metricsState.prsCreatedTotal();
+    return fromSessions > 0 ? fromSessions : fromMetrics;
+  }
+
   get acuPerPr(): number {
-    const timeSeriesTotal = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
-    const totalPrs = timeSeriesTotal > 0 ? timeSeriesTotal : this.metricsState.prsCreatedTotal();
-    return totalPrs > 0 ? this.billingState.currentCycleAcu() / totalPrs : 0;
+    return this.totalPrs > 0 ? this.billingState.currentCycleAcu() / this.totalPrs : 0;
   }
 
   get prsPerAcu(): number {
-    const timeSeriesTotal = this.metricsState.prsMetrics().reduce((acc, m) => acc + ((m.count ?? m.value) ?? 0), 0);
-    const totalPrs = timeSeriesTotal > 0 ? timeSeriesTotal : this.metricsState.prsCreatedTotal();
-    return this.billingState.currentCycleAcu() > 0 ? totalPrs / this.billingState.currentCycleAcu() : 0;
+    return this.billingState.currentCycleAcu() > 0 ? this.totalPrs / this.billingState.currentCycleAcu() : 0;
   }
 
   get acuWasted(): number {
-    const total = this.sessionsState.totalSessions();
-    return total > 0
-      ? ((this.sessionsState.failedSessions() + this.sessionsState.stoppedSessions()) / total) * this.billingState.currentCycleAcu()
-      : 0;
+    return this.sessionsState.acusFromErrors();
   }
 
-  // Session donut chart
+  // Session donut chart — uses real API statuses
   sessionDonutData = computed<ChartData<'doughnut'>>(() => {
     return {
-      labels: ['Running', 'Finished', 'Failed', 'Stopped', 'Suspended'],
+      labels: ['Running', 'Suspended (inactivity)', 'Suspended (user)', 'Error'],
       datasets: [{
         data: [
           this.sessionsState.runningSessions(),
-          this.sessionsState.finishedSessions(),
-          this.sessionsState.failedSessions(),
-          this.sessionsState.stoppedSessions(),
-          this.sessionsState.suspendedSessions()
+          this.sessionsState.suspendedByInactivity(),
+          this.sessionsState.suspendedByUser(),
+          this.sessionsState.errorSessions()
         ],
-        backgroundColor: ['#3f51b5', '#4caf50', '#f44336', '#9e9e9e', '#ff9800'],
-        hoverBackgroundColor: ['#5c6bc0', '#66bb6a', '#ef5350', '#bdbdbd', '#ffb74d']
+        backgroundColor: ['#3f51b5', '#ff9800', '#9e9e9e', '#f44336'],
+        hoverBackgroundColor: ['#5c6bc0', '#ffb74d', '#bdbdbd', '#ef5350']
       }]
     };
   });
@@ -121,14 +119,14 @@ export class SessionsComponent implements OnInit {
     plugins: { legend: { display: true, position: 'right' } }
   };
 
-  // Sessions metrics chart
-  sessionsMetricsChartData = computed<ChartData<'bar'>>(() => {
-    const metrics = this.metricsState.sessionsMetrics();
+  // Sessions per day chart — calculated from session created_at timestamps
+  sessionsPerDayChartData = computed<ChartData<'bar'>>(() => {
+    const perDay = this.sessionsState.sessionsPerDay();
     return {
-      labels: metrics.map(m => m.date ?? ''),
+      labels: perDay.map(d => d.date),
       datasets: [{
-        data: metrics.map(m => (m.count ?? m.value) ?? 0),
-        label: 'Sessions', backgroundColor: '#3f51b5', borderColor: '#3f51b5', borderWidth: 1
+        data: perDay.map(d => d.count),
+        label: 'Sesiones creadas', backgroundColor: '#3f51b5', borderColor: '#3f51b5', borderWidth: 1
       }]
     };
   });
