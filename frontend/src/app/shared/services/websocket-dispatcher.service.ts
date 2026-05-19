@@ -39,6 +39,8 @@ export class WebSocketDispatcherService {
       this.metricsState.handleMessage(msg);
     } else if (ADMIN_ENDPOINTS.includes(msg.endpoint)) {
       this.adminState.handleMessage(msg);
+    } else {
+      console.debug('[WS Dispatcher] Unhandled endpoint:', msg.endpoint);
     }
   }
 }

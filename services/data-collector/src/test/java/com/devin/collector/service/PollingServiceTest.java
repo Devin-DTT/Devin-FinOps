@@ -131,7 +131,7 @@ class PollingServiceTest {
         pollingService.pollEndpoints(List.of(ep));
 
         verify(devinApiClient, never()).get(any(), anyMap(), anyMap());
-        verify(orgApiClient, never()).get(any(), anyMap());
+        verify(orgApiClient, never()).get(any(), anyMap(), anyMap());
     }
 
     @Test
@@ -141,12 +141,12 @@ class PollingServiceTest {
                 .thenReturn(List.of("org_1", "org_2"));
         when(orgApiClient.isAvailable()).thenReturn(true);
         when(orgDiscoveryService.isMultiOrg()).thenReturn(true);
-        when(orgApiClient.get(any(), anyMap()))
+        when(orgApiClient.get(any(), anyMap(), anyMap()))
                 .thenReturn(Flux.just("{\"sessions\":[]}"));
 
         pollingService.pollEndpoints(List.of(ep));
 
-        verify(orgApiClient, times(2)).get(eq(ep), anyMap());
+        verify(orgApiClient, times(2)).get(eq(ep), anyMap(), anyMap());
     }
 
     @Test

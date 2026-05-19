@@ -41,10 +41,24 @@ public record WebSocketPayload(String type, String endpoint, long timestamp,
                                                  ObjectMapper mapper) {
         String endpointName;
         String orgId = null;
-        if (endpointKey.contains("__org_")) {
-            int idx = endpointKey.indexOf("__org_");
-            endpointName = endpointKey.substring(0, idx);
-            orgId = endpointKey.substring(idx + 6);
+
+        // Parse composite cache key format:
+        //   endpoint_name
+        //   endpoint_name__org_orgId
+        //   endpoint_name__session_sessionId
+        //   endpoint_name__org_orgId__session_sessionId
+        String remaining = endpointKey;
+        int orgIdx = remaining.indexOf("__org_");
+        int sessionIdx = remaining.indexOf("__session_");
+
+        if (orgIdx >= 0) {
+            endpointName = remaining.substring(0, orgIdx);
+            String afterOrg = remaining.substring(orgIdx + 6);
+            // If there's also a __session_ part after __org_, strip it from orgId
+            int sessionInOrg = afterOrg.indexOf("__session_");
+            orgId = sessionInOrg >= 0 ? afterOrg.substring(0, sessionInOrg) : afterOrg;
+        } else if (sessionIdx >= 0) {
+            endpointName = remaining.substring(0, sessionIdx);
         } else {
             endpointName = endpointKey;
         }

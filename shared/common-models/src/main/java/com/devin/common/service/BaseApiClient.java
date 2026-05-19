@@ -51,14 +51,15 @@ public abstract class BaseApiClient {
     public Flux<String> get(EndpointDefinition endpoint,
                             Map<String, String> pathParams,
                             Map<String, String> queryParams) {
-        String url = endpoint.buildUrl(pathParams);
+        String baseUrl = endpoint.buildUrl(pathParams);
         if (queryParams != null && !queryParams.isEmpty()) {
             String qs = queryParams.entrySet().stream()
                     .map(e -> URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
                             + "=" + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
                     .collect(Collectors.joining("&"));
-            url += (url.contains("?") ? "&" : "?") + qs;
+            baseUrl += (baseUrl.contains("?") ? "&" : "?") + qs;
         }
+        final String url = baseUrl;
         log.debug("GET {} [endpoint={}, scope={}]",
                 url, endpoint.getName(), getScopeLabel());
 
@@ -79,8 +80,12 @@ public abstract class BaseApiClient {
                     return Flux.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
-                .doOnError(e -> log.error("Error calling endpoint {}: {}",
-                        endpoint.getName(), e.getMessage()));
+                .doOnError(e -> {
+                    if (!(e instanceof WebClientResponseException.NotFound)) {
+                        log.error("Error calling endpoint {}: {}",
+                                endpoint.getName(), e.getMessage());
+                    }
+                });
     }
 
     /**
@@ -121,8 +126,12 @@ public abstract class BaseApiClient {
                     return Mono.error(ex);
                 })
                 .retryWhen(retrySpec(endpoint.getName()))
-                .doOnError(e -> log.error("Error calling endpoint {}: {}",
-                        endpoint.getName(), e.getMessage()));
+                .doOnError(e -> {
+                    if (!(e instanceof WebClientResponseException.NotFound)) {
+                        log.error("Error calling endpoint {}: {}",
+                                endpoint.getName(), e.getMessage());
+                    }
+                });
     }
 
     private Retry retrySpec(String endpointName) {

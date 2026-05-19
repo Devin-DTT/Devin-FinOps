@@ -50,9 +50,12 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
         this.redisKeyPrefix = properties.getRedisKeyPrefix();
     }
 
+    private static final int MAX_TEXT_MESSAGE_SIZE = 512 * 1024; // 512 KB
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         log.info("WebSocket connected: sessionId={}", session.getId());
+        session.setTextMessageSizeLimit(MAX_TEXT_MESSAGE_SIZE);
         sessionRegistry.register(session);
         sendInitialSnapshot(session);
     }
@@ -101,16 +104,31 @@ public class DevinWebSocketHandler extends TextWebSocketHandler {
                 return;
             }
 
+            int sent = 0;
             for (String key : keys) {
+                if (!session.isOpen()) {
+                    log.warn("Session {} closed during initial snapshot after {} keys",
+                            session.getId(), sent);
+                    return;
+                }
                 String rawData = redisTemplate.opsForValue().get(key);
                 if (rawData != null && !rawData.isEmpty()) {
                     String endpointKey = key.replace(redisKeyPrefix, "");
                     String payload = buildSnapshotPayload(endpointKey, rawData);
-                    sessionRegistry.sendToSession(session, payload);
+                    try {
+                        synchronized (session) {
+                            session.sendMessage(new TextMessage(payload));
+                        }
+                        sent++;
+                    } catch (Exception e) {
+                        log.warn("Failed to send key {} to session {}: {}",
+                                endpointKey, session.getId(), e.getMessage());
+                        return;
+                    }
                 }
             }
-            log.info("Sent initial snapshot ({} keys) to session {}",
-                    keys.size(), session.getId());
+            log.info("Sent initial snapshot ({}/{} keys) to session {}",
+                    sent, keys.size(), session.getId());
         } catch (Exception e) {
             log.error("Failed to send initial snapshot to session {}: {}",
                     session.getId(), e.getMessage());

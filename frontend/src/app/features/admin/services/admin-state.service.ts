@@ -9,6 +9,7 @@ export class AdminStateService {
   hypervisorCount = signal(0);
   queueStatus = signal('unknown');
   lastUpdated = signal(0);
+  memberMap = signal<Map<string, string>>(new Map());
 
   handleMessage(msg: WebSocketMessage): void {
     const data = msg.data as Record<string, unknown>;
@@ -34,30 +35,45 @@ export class AdminStateService {
     this.orgCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'organizations').length
+        : this.extractArray(data, 'items', 'organizations').length
     );
   }
 
   private handleUsers(data: Record<string, unknown>): void {
+    const items = this.extractArray(data, 'items', 'users') as Record<string, unknown>[];
     this.userCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'users').length
+        : items.length
     );
+    const map = new Map<string, string>();
+    for (const m of items) {
+      const uid = (m['user_id'] as string) ?? (m['id'] as string) ?? '';
+      const name = (m['display_name'] as string) ?? (m['username'] as string)
+        ?? (m['email'] as string) ?? (m['name'] as string) ?? '';
+      if (uid && name) {
+        map.set(uid, name);
+      }
+    }
+    if (map.size > 0) {
+      this.memberMap.set(map);
+    }
   }
 
   private handleHypervisors(data: Record<string, unknown>): void {
     this.hypervisorCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'hypervisors').length
+        : this.extractArray(data, 'items', 'hypervisors').length
     );
   }
 
-  private extractArray(data: Record<string, unknown>, key: string): unknown[] {
+  private extractArray(data: Record<string, unknown>, ...keys: string[]): unknown[] {
     if (Array.isArray(data)) return data;
-    const value = data[key];
-    if (Array.isArray(value)) return value;
+    for (const key of keys) {
+      const value = data[key];
+      if (Array.isArray(value)) return value;
+    }
     for (const k of Object.keys(data)) {
       if (Array.isArray(data[k])) return data[k] as unknown[];
     }

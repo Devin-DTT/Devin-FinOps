@@ -1,11 +1,20 @@
 server:
   port: 8080
+  netty:
+    # Increase max WebSocket frame size to 512 KB to support large
+    # endpoint responses (e.g. list_enterprise_sessions > 70 KB)
+    max-initial-line-length: 65536
 
 spring:
   application:
     name: api-gateway
+  codec:
+    max-in-memory-size: 1MB
   cloud:
     gateway:
+      httpclient:
+        websocket:
+          max-frame-payload-length: 524288
       routes:
         # WebSocket traffic -> websocket-service
         - id: websocket-service

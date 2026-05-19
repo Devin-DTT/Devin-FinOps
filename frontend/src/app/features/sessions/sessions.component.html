@@ -7,17 +7,17 @@
   <div class="kpi-section">
     <app-kpi-card title="ACUs / PR" [value]="acuPerPr" format="decimal2" cssClass="kpi-acu"></app-kpi-card>
     <app-kpi-card title="PRs / ACU" [value]="prsPerAcu" format="decimal3"></app-kpi-card>
-    <app-kpi-card title="% Sesiones con Outcome" [value]="sessionsState.sessionSuccessRate()" format="percent"></app-kpi-card>
-    <app-kpi-card title="Waste-to-Outcome Ratio" [value]="sessionsState.wasteToOutcomeRatio()" format="decimal2"></app-kpi-card>
+    <app-kpi-card title="% Sesiones con PRs" [value]="sessionsState.sessionSuccessRate()" format="percent" subtitle="Sesiones que generaron al menos 1 PR"></app-kpi-card>
+    <app-kpi-card title="Ratio ACUs Error / Total" [value]="sessionsState.wasteToOutcomeRatio()" format="decimal2" subtitle="ACUs de sesiones con error vs total"></app-kpi-card>
   </div>
 
   <!-- Desglose de Sesiones -->
   <div class="finops-section-title">Desglose de Sesiones</div>
   <div class="kpi-section">
-    <app-kpi-card title="Sesiones Finished" [value]="sessionsState.finishedSessions()"></app-kpi-card>
-    <app-kpi-card title="Sesiones Failed" [value]="sessionsState.failedSessions()"></app-kpi-card>
-    <app-kpi-card title="Sesiones Stopped" [value]="sessionsState.stoppedSessions()"></app-kpi-card>
-    <app-kpi-card title="ACUs desperdiciados (proxy)" [value]="acuWasted" format="decimal"></app-kpi-card>
+    <app-kpi-card title="Sesiones con PRs" [value]="sessionsState.sessionsWithPrs()" subtitle="De las sesiones cargadas"></app-kpi-card>
+    <app-kpi-card title="Sesiones Error" [value]="sessionsState.errorSessions()" subtitle="Status 'error' en API"></app-kpi-card>
+    <app-kpi-card title="Detenidas por Usuario" [value]="sessionsState.suspendedByUser()" subtitle="suspended + status_detail=user_request"></app-kpi-card>
+    <app-kpi-card title="ACUs en Errores" [value]="acuWasted" format="decimal" subtitle="ACUs consumidos por sesiones con error"></app-kpi-card>
   </div>
 
   <!-- Eficiencia de Sesiones -->
@@ -29,7 +29,7 @@
       </mat-card-header>
       <mat-card-content>
         <mat-progress-bar mode="determinate" [value]="sessionsState.sessionSuccessRate()" class="acu-bar"></mat-progress-bar>
-        <span class="kpi-sub">{{ sessionsState.sessionSuccessRate() | number:'1.1-1' }}% sesiones con outcome ({{ sessionsState.finishedSessions() }} finished / {{ sessionsState.totalSessions() }} totales)</span>
+        <span class="kpi-sub">{{ sessionsState.sessionSuccessRate() | number:'1.1-1' }}% sesiones con PRs ({{ sessionsState.sessionsWithPrs() }} con PRs / {{ sessionsState.totalSessions() }} totales)</span>
       </mat-card-content>
     </mat-card>
   </div>
@@ -37,8 +37,8 @@
   <!-- Charts -->
   <div class="finops-section-title">Actividad</div>
   <div class="charts-row">
-    <app-chart-card title="Distribución de Sesiones" [chartData]="sessionDonutData" [chartOptions]="sessionDonutOptions" chartType="doughnut"></app-chart-card>
-    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Distribución de Sesiones" [chartData]="sessionDonutData()" [chartOptions]="sessionDonutOptions" chartType="doughnut"></app-chart-card>
+    <app-chart-card title="Sesiones por Día" [chartData]="sessionsPerDayChartData()" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
   </div>
 
   <!-- Sessions Table -->

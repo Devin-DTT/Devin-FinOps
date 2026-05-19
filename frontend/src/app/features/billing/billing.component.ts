@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -8,6 +8,7 @@ import { ChartConfiguration, ChartData } from 'chart.js';
 import { BillingStateService } from './services/billing-state.service';
 import { AdminStateService } from '../admin/services/admin-state.service';
 import { SessionsStateService } from '../sessions/services/sessions-state.service';
+import { MetricsStateService } from '../metrics/services/metrics-state.service';
 import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.component';
 import { NaCardComponent } from '../../shared/components/na-card/na-card.component';
 import { ChartCardComponent } from '../../shared/components/chart-card/chart-card.component';
@@ -50,6 +51,30 @@ export class BillingComponent {
   billingState = inject(BillingStateService);
   adminState = inject(AdminStateService);
   sessionsState = inject(SessionsStateService);
+  metricsState = inject(MetricsStateService);
+
+  activeUserNames = computed(() => {
+    const ids = this.sessionsState.activeUserIds();
+    const map = this.adminState.memberMap();
+    const names: string[] = [];
+    for (const id of ids) {
+      const name = map.get(id);
+      if (name) {
+        const short = name.includes('@') ? name.split('@')[0] : name;
+        names.push(short);
+      }
+    }
+    return names;
+  });
+
+  mauSubtitle = computed(() => {
+    const names = this.activeUserNames();
+    if (names.length === 0) {
+      const label = this.metricsState.mauLabel();
+      return label || '';
+    }
+    return names.join(', ');
+  });
 
   get acuPerUser(): number {
     return this.adminState.userCount() > 0
@@ -64,7 +89,7 @@ export class BillingComponent {
   }
 
   // Chart: Daily ACU consumption
-  get acuChartData(): ChartData<'line'> {
+  acuChartData = computed<ChartData<'line'>>(() => {
     const entries = [...this.billingState.dailyConsumption()].sort((a, b) => a.date.localeCompare(b.date));
     return {
       labels: entries.map(e => e.date),
@@ -76,7 +101,7 @@ export class BillingComponent {
         backgroundColor: 'rgba(255, 152, 0, 0.1)'
       }]
     };
-  }
+  });
 
   acuChartOptions: ChartConfiguration<'line'>['options'] = {
     responsive: true, maintainAspectRatio: false,
@@ -88,7 +113,7 @@ export class BillingComponent {
   };
 
   // Chart: Billing cycles history
-  get billingCyclesChartData(): ChartData<'bar'> {
+  billingCyclesChartData = computed<ChartData<'bar'>>(() => {
     const cycles = this.billingState.billingCycles();
     return {
       labels: cycles.map(c => c.start_date),
@@ -100,7 +125,7 @@ export class BillingComponent {
         borderWidth: 1
       }]
     };
-  }
+  });
 
   billingCyclesChartOptions: ChartConfiguration<'bar'>['options'] = {
     responsive: true, maintainAspectRatio: false,

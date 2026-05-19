@@ -2,22 +2,28 @@
   <!-- Active Users KPIs -->
   <div class="finops-section-title">Usuarios Activos</div>
   <div class="kpi-section">
-    <app-kpi-card title="DAU" [value]="metricsState.dauCount()"></app-kpi-card>
-    <app-kpi-card title="WAU" [value]="metricsState.wauCount()"></app-kpi-card>
-    <app-kpi-card title="MAU" [value]="metricsState.mauCount()"></app-kpi-card>
+    <app-kpi-card title="DAU (Usuarios Activos Hoy)" [value]="metricsState.dauCount()" [subtitle]="metricsState.dauLabel()"></app-kpi-card>
+    <app-kpi-card title="WAU (Usuarios Activos Semana)" [value]="metricsState.wauCount()" [subtitle]="metricsState.wauLabel()"></app-kpi-card>
+    <app-kpi-card title="MAU (Usuarios Activos Mes)" [value]="metricsState.mauCount()" [subtitle]="mauSubtitle()"></app-kpi-card>
   </div>
 
   <!-- Charts Row 1: PRs and Sessions -->
   <div class="finops-section-title">Actividad</div>
   <div class="charts-row">
-    <app-chart-card title="Pull Requests por Día" [chartData]="prsChartData" [chartOptions]="prsChartOptions" chartType="bar"></app-chart-card>
-    <app-chart-card title="Sesiones por Día" [chartData]="sessionsMetricsChartData" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Pull Requests por Día" [chartData]="prsChartData()" [chartOptions]="prsChartOptions" chartType="bar"></app-chart-card>
+    <app-chart-card title="Sesiones por Día" [chartData]="sessionsPerDayChartData()" [chartOptions]="sessionsMetricsChartOptions" chartType="bar"></app-chart-card>
   </div>
 
-  <!-- Charts Row 2: Usage and Searches -->
+  <!-- Uso y Búsquedas — API returns totals only, not time series -->
   <div class="finops-section-title">Uso y Búsquedas</div>
-  <div class="charts-row">
-    <app-chart-card title="Uso a lo largo del tiempo" [chartData]="usageChartData" [chartOptions]="usageChartOptions" chartType="line"></app-chart-card>
-    <app-chart-card title="Búsquedas por Día" [chartData]="searchesChartData" [chartOptions]="searchesChartOptions" chartType="bar"></app-chart-card>
+  <div class="kpi-section">
+    <app-kpi-card title="Total Sesiones Creadas (API)" [value]="metricsState.sessionsCreatedTotal()" subtitle="Último periodo consultado (/metrics/sessions)"></app-kpi-card>
+    <app-kpi-card title="PRs Creados (API)" [value]="metricsState.prsCreatedTotal()" subtitle="Último periodo consultado (/metrics/prs)"></app-kpi-card>
+    <app-kpi-card title="PRs Mergeados (API)" [value]="metricsState.prsMergedTotal()" subtitle="Último periodo consultado (/metrics/prs)"></app-kpi-card>
+    <app-kpi-card title="Búsquedas (API)" [value]="metricsState.searchesCreatedTotal()" subtitle="Último periodo consultado (/metrics/searches)"></app-kpi-card>
+  </div>
+  <div class="kpi-section">
+    <app-na-card title="Uso a lo largo del tiempo" reason="La API /metrics/usage devuelve totales por periodo, no series temporales diarias. Se necesitaría consultar múltiples rangos para construir el gráfico."></app-na-card>
+    <app-na-card title="Búsquedas por Día" reason="La API /metrics/searches devuelve un total por rango de fechas (searches_created_count), no una serie temporal diaria."></app-na-card>
   </div>
 </div>

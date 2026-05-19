@@ -86,6 +86,7 @@ class DevinWebSocketHandlerTest {
     @Test
     void afterConnectionEstablished_sendsInitialSnapshot() throws Exception {
         when(session.getId()).thenReturn("session-1");
+        when(session.isOpen()).thenReturn(true);
         stubScanReturning(List.of(
                 "finops:endpoint:list_sessions",
                 "finops:endpoint:list_billing_cycles"
@@ -98,7 +99,7 @@ class DevinWebSocketHandlerTest {
 
         handler.afterConnectionEstablished(session);
 
-        verify(sessionRegistry, times(2)).sendToSession(eq(session), anyString());
+        verify(session, times(2)).sendMessage(any(TextMessage.class));
     }
 
     @Test
@@ -144,6 +145,7 @@ class DevinWebSocketHandlerTest {
     @Test
     void afterConnectionEstablished_parsesOrgKeyCorrectly() throws Exception {
         when(session.getId()).thenReturn("session-1");
+        when(session.isOpen()).thenReturn(true);
         stubScanReturning(List.of("finops:endpoint:list_sessions__org_org123"));
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("finops:endpoint:list_sessions__org_org123"))
@@ -151,9 +153,10 @@ class DevinWebSocketHandlerTest {
 
         handler.afterConnectionEstablished(session);
 
-        verify(sessionRegistry).sendToSession(eq(session),
-                argThat(payload ->
-                        payload.contains("\"endpoint\":\"list_sessions\"")
-                        && payload.contains("\"org_id\":\"org123\"")));
+        verify(session).sendMessage(argThat(msg -> {
+                TextMessage text = (TextMessage) msg;
+                return text.getPayload().contains("\"endpoint\":\"list_sessions\"")
+                        && text.getPayload().contains("\"org_id\":\"org123\"");
+        }));
     }
 }
