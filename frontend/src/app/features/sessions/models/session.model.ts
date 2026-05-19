@@ -12,6 +12,7 @@ export interface DevinSession {
   snap_count?: number;
   total_tokens?: number;
   origin?: string;
+  user_id?: string;
   pull_request?: {
     url?: string;
     status?: string;

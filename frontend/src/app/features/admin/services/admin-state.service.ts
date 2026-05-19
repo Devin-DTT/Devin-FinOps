@@ -9,6 +9,7 @@ export class AdminStateService {
   hypervisorCount = signal(0);
   queueStatus = signal('unknown');
   lastUpdated = signal(0);
+  memberMap = signal<Map<string, string>>(new Map());
 
   handleMessage(msg: WebSocketMessage): void {
     const data = msg.data as Record<string, unknown>;
@@ -39,11 +40,24 @@ export class AdminStateService {
   }
 
   private handleUsers(data: Record<string, unknown>): void {
+    const items = this.extractArray(data, 'items', 'users') as Record<string, unknown>[];
     this.userCount.set(
       typeof data['total'] === 'number'
         ? (data['total'] as number)
-        : this.extractArray(data, 'items', 'users').length
+        : items.length
     );
+    const map = new Map<string, string>();
+    for (const m of items) {
+      const uid = (m['user_id'] as string) ?? (m['id'] as string) ?? '';
+      const name = (m['display_name'] as string) ?? (m['username'] as string)
+        ?? (m['email'] as string) ?? (m['name'] as string) ?? '';
+      if (uid && name) {
+        map.set(uid, name);
+      }
+    }
+    if (map.size > 0) {
+      this.memberMap.set(map);
+    }
   }
 
   private handleHypervisors(data: Record<string, unknown>): void {

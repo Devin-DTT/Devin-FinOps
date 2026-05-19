@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { ChartConfiguration, ChartData } from 'chart.js';
 
 import { MetricsStateService } from './services/metrics-state.service';
+import { AdminStateService } from '../admin/services/admin-state.service';
+import { SessionsStateService } from '../sessions/services/sessions-state.service';
 import { KpiCardComponent } from '../../shared/components/kpi-card/kpi-card.component';
 import { ChartCardComponent } from '../../shared/components/chart-card/chart-card.component';
 
@@ -28,6 +30,30 @@ import { ChartCardComponent } from '../../shared/components/chart-card/chart-car
 })
 export class MetricsComponent {
   metricsState = inject(MetricsStateService);
+  adminState = inject(AdminStateService);
+  sessionsState = inject(SessionsStateService);
+
+  mauActiveNames = computed(() => {
+    const ids = this.sessionsState.activeUserIds();
+    const map = this.adminState.memberMap();
+    const names: string[] = [];
+    for (const id of ids) {
+      const name = map.get(id);
+      if (name) {
+        const short = name.includes('@') ? name.split('@')[0] : name;
+        names.push(short);
+      }
+    }
+    return names;
+  });
+
+  mauSubtitle = computed(() => {
+    const names = this.mauActiveNames();
+    if (names.length === 0) {
+      return this.metricsState.mauLabel();
+    }
+    return names.join(', ');
+  });
 
   // PRs chart
   prsChartData = computed<ChartData<'bar'>>(() => {

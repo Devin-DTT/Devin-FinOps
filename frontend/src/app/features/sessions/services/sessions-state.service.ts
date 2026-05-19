@@ -15,6 +15,20 @@ export class SessionsStateService {
   errorSessions = signal(0);
   lastUpdated = signal(0);
 
+  // Unique user IDs from sessions this month
+  activeUserIds = computed(() => {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
+    const ids = new Set<string>();
+    for (const s of this.sessions()) {
+      const ts = typeof s.created_at === 'number' ? s.created_at : parseInt(s.created_at as string, 10);
+      if (ts >= monthStart && s.user_id) {
+        ids.add(s.user_id);
+      }
+    }
+    return [...ids];
+  });
+
   // Computed signals
   sessionSuccessRate = computed(() =>
     this.totalSessions() > 0

@@ -53,6 +53,29 @@ export class BillingComponent {
   sessionsState = inject(SessionsStateService);
   metricsState = inject(MetricsStateService);
 
+  activeUserNames = computed(() => {
+    const ids = this.sessionsState.activeUserIds();
+    const map = this.adminState.memberMap();
+    const names: string[] = [];
+    for (const id of ids) {
+      const name = map.get(id);
+      if (name) {
+        const short = name.includes('@') ? name.split('@')[0] : name;
+        names.push(short);
+      }
+    }
+    return names;
+  });
+
+  mauSubtitle = computed(() => {
+    const names = this.activeUserNames();
+    if (names.length === 0) {
+      const label = this.metricsState.mauLabel();
+      return label || '';
+    }
+    return names.join(', ');
+  });
+
   get acuPerUser(): number {
     return this.adminState.userCount() > 0
       ? this.billingState.currentCycleAcu() / this.adminState.userCount()

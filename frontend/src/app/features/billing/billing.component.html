@@ -3,7 +3,7 @@
   <div class="finops-section-title">KPIs Principales</div>
   <div class="kpi-section">
     <app-kpi-card title="ACUs Consumidos (Total)" [value]="billingState.currentCycleAcu()" format="decimal" cssClass="kpi-acu"></app-kpi-card>
-    <app-kpi-card title="MAU (Usuarios Activos Mes)" [value]="metricsState.mauCount()" format="integer"></app-kpi-card>
+    <app-kpi-card title="MAU (Usuarios Activos Mes)" [value]="metricsState.mauCount()" format="integer" [subtitle]="mauSubtitle()"></app-kpi-card>
     <app-kpi-card title="Total Sesiones" [value]="sessionsState.totalSessions()"></app-kpi-card>
     <app-kpi-card title="Usuarios Registrados" [value]="adminState.userCount()"></app-kpi-card>
   </div>
